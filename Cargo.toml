@@ -163,7 +163,8 @@ missing_panics_doc = "allow"
 cast_possible_truncation = "allow"
 
 [profile.release]
-opt-level = 3
+# "s": -8 MB against 3, feed throughput -1% and first frame unchanged (scripts/metrics.sh)
+opt-level = "s"
 lto = "fat"
 codegen-units = 1
 panic = "unwind"
