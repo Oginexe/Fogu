@@ -20,6 +20,8 @@ pub mod shellquote;
 mod size;
 mod split;
 pub mod ssh_config;
+#[cfg(windows)]
+pub mod winsec;
 
 pub use action::{Action, Dir, Hotkeys};
 pub use background::{Background, EffectiveBackground, Fit, TabBackground, effective_background};

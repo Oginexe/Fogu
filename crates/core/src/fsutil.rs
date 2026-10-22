@@ -1,8 +1,10 @@
 //! Private-by-default filesystem helpers.
 //!
 //! On Unix, state and config directories are `0700` and files we create are `0600`. On Windows
-//! the user-profile ACL already protects `%APPDATA%`/`%LOCALAPPDATA%`; the permission helpers
-//! are no-ops there, while atomic writes, temp-file hygiene and cleanup behave the same.
+//! the same places get a protected DACL for the current user and SYSTEM only
+//! ([`crate::winsec::restrict_to_user`]), so a `--config-dir` in a shared folder stays private
+//! too; files get it before they hold any data. Atomic writes, temp-file hygiene and cleanup
+//! behave the same on both.
 //!
 //! Whole-file rewrites go through [`write_private_atomic`]: a fresh temp file (`create_new`, so
 //! an existing file or symlink of that name is never opened), `fsync`, then `rename` over the
@@ -18,8 +20,8 @@ pub const DIR_MODE: u32 = 0o700;
 /// Mode of files we create (Unix only).
 pub const FILE_MODE: u32 = 0o600;
 
-/// Creates `dir` and missing parents with mode `0700` on Unix (existing directories are left
-/// alone).
+/// Creates `dir` and missing parents with mode `0700` on Unix, a private DACL on Windows
+/// (existing directories are left alone).
 pub fn create_private_dir(dir: &Path) -> io::Result<()> {
     #[cfg(unix)]
     {
@@ -32,11 +34,16 @@ pub fn create_private_dir(dir: &Path) -> io::Result<()> {
     }
     #[cfg(windows)]
     {
-        std::fs::create_dir_all(dir)
+        let new = !dir.exists();
+        std::fs::create_dir_all(dir)?;
+        if new {
+            crate::winsec::restrict_to_user(dir)?;
+        }
+        Ok(())
     }
 }
 
-/// Like [`create_private_dir`], but an existing `dir` is also set to `0700`: for directories
+/// Like [`create_private_dir`], but an existing `dir` is also made private: for directories
 /// only Fogu owns (state, logs), where files created later with the default umask (the daily
 /// log) must still be private.
 pub fn ensure_private_dir(dir: &Path) -> io::Result<()> {
@@ -46,10 +53,12 @@ pub fn ensure_private_dir(dir: &Path) -> io::Result<()> {
         use std::os::unix::fs::PermissionsExt as _;
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(DIR_MODE))?;
     }
+    #[cfg(windows)]
+    crate::winsec::restrict_to_user(dir)?;
     Ok(())
 }
 
-/// Opens `path` for appending, creating it with mode `0600` on Unix.
+/// Opens `path` for appending, creating it with mode `0600` on Unix (private DACL on Windows).
 pub fn open_private_append(path: &Path) -> io::Result<File> {
     let mut options = std::fs::OpenOptions::new();
     options.create(true).append(true);
@@ -59,10 +68,14 @@ pub fn open_private_append(path: &Path) -> io::Result<File> {
 
         options.mode(FILE_MODE);
     }
-    options.open(path)
+    let file = options.open(path)?;
+    #[cfg(windows)]
+    crate::winsec::restrict_to_user(path)?;
+    Ok(file)
 }
 
-/// Opens `path` for writing, truncating it and creating it with mode `0600` on Unix.
+/// Opens `path` for writing, truncating it and creating it with mode `0600` on Unix (private
+/// DACL on Windows).
 pub fn open_private_truncate(path: &Path) -> io::Result<File> {
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
@@ -72,7 +85,10 @@ pub fn open_private_truncate(path: &Path) -> io::Result<File> {
 
         options.mode(FILE_MODE);
     }
-    options.open(path)
+    let file = options.open(path)?;
+    #[cfg(windows)]
+    crate::winsec::restrict_to_user(path)?;
+    Ok(file)
 }
 
 /// Appends `bytes` to `path` (created `0600` on Unix).
@@ -96,6 +112,8 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
             options.mode(FILE_MODE);
         }
         let mut file = options.open(&tmp)?;
+        #[cfg(windows)]
+        crate::winsec::restrict_to_user(&tmp)?;
         file.write_all(bytes)?;
         file.sync_all()?;
         std::fs::rename(&tmp, path)
@@ -112,7 +130,7 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-/// Sets mode `0600` on `path` on Unix; a no-op on Windows.
+/// Sets mode `0600` on `path` on Unix, a private DACL on Windows.
 pub fn restrict_file(path: &Path) -> io::Result<()> {
     #[cfg(unix)]
     {
@@ -122,31 +140,21 @@ pub fn restrict_file(path: &Path) -> io::Result<()> {
     }
     #[cfg(windows)]
     {
-        let _ = path;
-        Ok(())
+        crate::winsec::restrict_to_user(path)
     }
 }
 
 /// Sets mode `0600` on every regular file in `dir` whose name starts with `prefix` (log files
-/// written by a library that creates them with the umask's mode). Best effort per file. On
-/// Windows this is a no-op.
+/// written by a library that creates them with the umask's mode).
 pub fn restrict_files(dir: &Path, prefix: &str) -> io::Result<()> {
-    #[cfg(unix)]
-    {
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
-            let name = entry.file_name();
-            if name.to_string_lossy().starts_with(prefix) && entry.file_type()?.is_file() {
-                restrict_file(&entry.path())?;
-            }
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with(prefix) && entry.file_type()?.is_file() {
+            restrict_file(&entry.path())?;
         }
-        Ok(())
     }
-    #[cfg(windows)]
-    {
-        let _ = (dir, prefix);
-        Ok(())
-    }
+    Ok(())
 }
 
 /// `.<name>.tmp-<pid>-<n>` in the directory of `path` (unique per process and call).

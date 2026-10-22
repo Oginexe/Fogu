@@ -2,8 +2,12 @@
 //!
 //! Windows ships an agent as a service (`ssh-agent`) that listens on
 //! `\\.\pipe\openssh-ssh-agent`. Fogu never starts or stops that service; it only connects to it
-//! when the profile asks for agent authentication or forwarding.
+//! when the profile asks for agent authentication or forwarding. A pipe owned by anyone but
+//! SYSTEM, Administrators or the user is refused: another user can create that pipe while the
+//! service is stopped, and would then see every signing request.
 
+use std::io;
+use std::os::windows::io::AsHandle as _;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -12,6 +16,8 @@ use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 
 /// How long one connection attempt may take.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+/// `ERROR_PIPE_BUSY`: every instance of the pipe is in use; retry shortly.
+const ERROR_PIPE_BUSY: i32 = 231;
 
 /// The named pipe of the Windows OpenSSH agent service.
 pub(crate) const DEFAULT_PIPE: &str = r"\\.\pipe\openssh-ssh-agent";
@@ -57,11 +63,11 @@ pub(crate) async fn serve_forward(
     reply: russh::client::ChannelOpenHandle,
     socket: &Path,
 ) {
-    match timeout_open(socket).await {
-        Ok(Ok(mut agent)) => {
+    match tokio::time::timeout(CONNECT_TIMEOUT, open_trusted(socket)).await {
+        Ok(Ok(mut pipe)) => {
             reply.accept().await;
             let mut stream = channel.into_stream();
-            let _totals = super::forward::pump(&mut stream, &mut agent).await;
+            let _totals = super::forward::pump(&mut stream, &mut pipe).await;
         }
         Ok(Err(err)) => {
             tracing::warn!(error = %err, "forwarded agent request refused: agent unreachable");
@@ -70,32 +76,56 @@ pub(crate) async fn serve_forward(
     }
 }
 
-async fn timeout_open(path: &Path) -> Result<Result<NamedPipeClient, std::io::Error>, ()> {
-    match tokio::time::timeout(
-        CONNECT_TIMEOUT,
-        tokio::task::spawn_blocking({
-            let path = path.to_path_buf();
-            move || ClientOptions::new().open(path)
-        }),
-    )
-    .await
-    {
-        Ok(Ok(result)) => Ok(result),
-        Ok(Err(_join)) => Err(()),
-        Err(_elapsed) => Err(()),
+/// Opens the agent's pipe, retrying while every instance is busy, and keeps it only if its owner
+/// is trusted ([`fogu_core::winsec::pipe_owner_trusted`]).
+async fn open_trusted(path: &Path) -> io::Result<NamedPipeClient> {
+    let pipe = loop {
+        match ClientOptions::new().open(path) {
+            Ok(pipe) => break pipe,
+            Err(err) if err.raw_os_error() == Some(ERROR_PIPE_BUSY) => {}
+            Err(err) => return Err(err),
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    if !fogu_core::winsec::pipe_owner_trusted(pipe.as_handle())? {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "the agent pipe belongs to another user; refused",
+        ));
     }
+    Ok(pipe)
 }
 
 async fn try_connect(path: &Path) -> Option<Agent> {
-    match tokio::time::timeout(CONNECT_TIMEOUT, AgentClient::connect_named_pipe(path)).await {
-        Ok(Ok(agent)) => {
+    match tokio::time::timeout(CONNECT_TIMEOUT, open_trusted(path)).await {
+        Ok(Ok(pipe)) => {
             tracing::info!(path = %path.display(), "using Windows OpenSSH agent");
-            Some(agent)
+            Some(AgentClient::connect(pipe))
+        }
+        Ok(Err(err)) if err.kind() == io::ErrorKind::PermissionDenied => {
+            tracing::warn!(path = %path.display(), error = %err, "SSH agent pipe not trusted");
+            None
         }
         Ok(Err(err)) => {
             tracing::debug!(path = %path.display(), error = %err, "no SSH agent here");
             None
         }
         Err(_elapsed) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![expect(clippy::unwrap_used, reason = "tests")]
+
+    use tokio::net::windows::named_pipe::ServerOptions;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn a_pipe_created_by_this_user_is_trusted() {
+        let name = format!(r"\\.\pipe\fogu-agent-test-{}", std::process::id());
+        let _server = ServerOptions::new().create(&name).unwrap();
+        open_trusted(Path::new(&name)).await.unwrap();
     }
 }

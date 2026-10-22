@@ -113,6 +113,15 @@ security-framework = "3.7.0"
 # build keeps `oo7`/Secret Service; only the Windows target pulls `windows-native`.
 keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
 
+# why: Windows only: private DACLs for Fogu's files and the owner check of the SSH agent's
+# named pipe (`fogu_core::winsec`). Already in the tree through tokio and others: no new crate.
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Threading",
+] }
+
 # why: native file pickers for SFTP upload/download.
 # Only the `xdg-portal` backend (D-Bus portal, zenity fallback): no GTK, no `wayland` feature (the
 # portal needs no Wayland handle since we open the dialog without a parent window).
@@ -130,7 +139,8 @@ image = { version = "0.25.10", default-features = false, features = ["png", "jpe
 clap = { version = "4.6.7", features = ["derive"] }
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# `deny`, not `forbid`: `fogu_core::winsec` (Windows only) is the one module allowed to opt out.
+unsafe_code = "deny"
 missing_debug_implementations = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
 
