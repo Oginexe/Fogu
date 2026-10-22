@@ -179,6 +179,21 @@ fn learn_writes_0600_openssh_lines_and_lookup_finds_them() {
 }
 
 #[test]
+fn a_cert_authority_line_alone_never_makes_a_host_known() {
+    let dir = temp_dir("ca");
+    let path = write(
+        &dir,
+        "known_hosts",
+        &format!("@cert-authority *.example ssh-ed25519 {KEY_B}\n"),
+    );
+    assert_eq!(
+        lookup(&[path], "y.example", 22, &key(KEY_B)),
+        Lookup::Unknown
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn hostile_host_names_are_written_hashed() {
     let dir = temp_dir("hostile");
     let path = dir.join("known_hosts");
@@ -195,6 +210,11 @@ fn hostile_host_names_are_written_hashed() {
         lookup(&files, "other.example", 22, &key(KEY_A)),
         Lookup::Unknown
     );
+    // Hashed `[host]:port`: the port is part of the hashed name.
+    learn(&path, "odd host", 2222, &key(KEY_B)).unwrap();
+    let files = [path.clone()];
+    assert_eq!(lookup(&files, "odd host", 2222, &key(KEY_B)), Lookup::Known);
+    assert_eq!(lookup(&files, "odd host", 22, &key(KEY_B)), Lookup::Unknown);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
