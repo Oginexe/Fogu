@@ -52,6 +52,8 @@ pub(crate) struct Shared {
 }
 
 /// Locks the shared state, recovering from poisoning (the data stays consistent: plain pushes).
+/// Lock order: taken while `term` is locked (alacritty calls the proxy mid-parse), so never lock
+/// `term` while holding this one.
 pub(crate) fn lock(shared: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
     shared.lock().unwrap_or_else(PoisonError::into_inner)
 }
