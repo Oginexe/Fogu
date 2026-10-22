@@ -75,6 +75,7 @@ jobs:
           cp assets/icons/fogu-256.png Fogu.AppDir/fogu.png
           ln -s usr/bin/fogu Fogu.AppDir/AppRun
           curl -fsSLo appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool" | sha256sum -c -
           chmod +x appimagetool
           # no FUSE on the runner: the tool unpacks itself instead of mounting
           APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool Fogu.AppDir Fogu-x86_64.AppImage
@@ -91,11 +92,17 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      # artifact attestations: anyone can check a download with `gh attestation verify`
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
       - run: sha256sum Fogu-*.tar.gz Fogu-*.zip Fogu-*.AppImage > SHA256SUMS
+      - uses: actions/attest@v4
+        with:
+          subject-path: "Fogu-*.tar.gz, Fogu-*.zip, Fogu-*.AppImage"
       - run: gh release create "$GITHUB_REF_NAME" Fogu-*.tar.gz Fogu-*.zip Fogu-*.AppImage SHA256SUMS --repo "$GITHUB_REPOSITORY" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
