@@ -141,8 +141,9 @@ const SERVICE: &str = "fogu";
 /// counts bytes).
 const USER_NAME_MAX: usize = 512;
 
-/// A stable name from the key's attributes: `fogu:name=value;…`, with `%`, `=` and `;` in a
-/// value percent-escaped so two different keys never share a name. No secret is included.
+/// A stable name from the key's attributes: `fogu:name=value;…`, with `%`, `=`, `;`, upper case
+/// and non-ASCII in a value percent-escaped (UTF-8 bytes) so two different keys never share a
+/// name, even compared without case as the Credential Manager does. No secret is included.
 fn id(key: &SecretKey) -> String {
     let mut out = String::from("fogu:");
     for (name, value) in key.attributes() {
@@ -150,9 +151,8 @@ fn id(key: &SecretKey) -> String {
         out.push('=');
         for c in value.chars() {
             match c {
-                '%' => out.push_str("%25"),
-                '=' => out.push_str("%3D"),
-                ';' => out.push_str("%3B"),
+                '%' | '=' | ';' => escape(&mut out, c),
+                c if c.is_ascii_uppercase() || !c.is_ascii() => escape(&mut out, c),
                 c => out.push(c),
             }
         }
@@ -161,10 +161,18 @@ fn id(key: &SecretKey) -> String {
     out
 }
 
+fn escape(out: &mut String, c: char) {
+    use std::fmt::Write as _;
+
+    for byte in c.encode_utf8(&mut [0; 4]).bytes() {
+        let _infallible = write!(out, "%{byte:02X}");
+    }
+}
+
 /// The credential for `key`. Its target (the Credential Manager's only lookup field) is
-/// `<id>.fogu`, the name earlier builds gave it, so values without `%`, `=` or `;` still find
-/// what they stored. The user name is only shown in the Credential Manager: the key's label,
-/// cut to the length it accepts.
+/// `<id>.fogu`, the name earlier builds gave it, so lower-case ASCII values without `%`, `=` or
+/// `;` still find what they stored. The user name is only shown in the Credential Manager: the
+/// key's label, cut to the length it accepts.
 fn entry(key: &SecretKey) -> keyring::Result<Entry> {
     let target = format!("{}.{SERVICE}", id(key));
     let mut user = key.label();
@@ -345,6 +353,14 @@ mod tests {
         assert!(id(&tricky).contains("user=a%3Bhost%3Dx;"));
         // A plain value keeps the name earlier builds stored it under.
         assert!(id(&key("alice")).contains("user=alice;"));
+    }
+
+    #[test]
+    fn ids_differ_even_ignoring_case() {
+        // The Credential Manager compares target names without case.
+        let folded = |user: &str| id(&key(user)).to_lowercase();
+        assert_ne!(folded("Alice"), folded("alice"));
+        assert_ne!(folded("\u{c9}"), folded("\u{e9}"));
     }
 
     #[test]

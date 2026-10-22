@@ -5,7 +5,7 @@
 
 #![no_main]
 
-use fogu_session::sftp::{DISPLAY_NAME_MAX_CHARS, NAME_MAX};
+use fogu_session::sftp::{DISPLAY_NAME_MAX_CHARS, NAME_MAX, validate_windows_name};
 use fogu_session::{display_name, validate_name};
 use libfuzzer_sys::fuzz_target;
 
@@ -22,6 +22,15 @@ fuzz_target!(|data: &[u8]| {
                 .chars()
                 .any(|c| matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'))
         );
+    }
+    // The Windows rule only narrows the plain one, and never lets through a stream, a separator,
+    // a drive, a name Windows trims, or a device.
+    if let Ok(name) = validate_windows_name(&text) {
+        assert!(validate_name(name).is_ok());
+        assert!(!name.contains(['\\', ':', '<', '>', '"', '|', '?', '*']));
+        assert!(!name.ends_with(['.', ' ']));
+        let stem = name.split('.').next().unwrap_or_default().trim_end().to_ascii_lowercase();
+        assert!(!matches!(stem.as_str(), "con" | "prn" | "aux" | "nul" | "conin$" | "conout$"));
     }
     let shown = display_name(&text);
     assert!(!shown.chars().any(char::is_control));

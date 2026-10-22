@@ -360,18 +360,11 @@ fn write_loop(
 /// The user's default shell on Windows: PowerShell 7, then Windows PowerShell, then `cmd.exe`.
 fn default_shell() -> String {
     for name in ["pwsh.exe", "powershell.exe"] {
-        if let Some(path) = find_in_path(name) {
+        if let Some(path) = fogu_core::platform::find_in_path(name) {
             return path.to_string_lossy().into_owned();
         }
     }
     std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_owned())
-}
-
-fn find_in_path(name: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|dir| dir.join(name))
-        .find(|path| path.is_file())
 }
 
 #[cfg(test)]

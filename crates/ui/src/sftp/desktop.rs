@@ -214,7 +214,13 @@ fn refuse_open(path: &Path) -> Result<(), String> {
     };
     let ext = opened_extension(path);
     let listed = |list: &[&str]| ext.as_deref().is_some_and(|e| list.contains(&e));
-    let launchable = listed(LAUNCHABLE) || ext.as_deref().is_some_and(is_windows_executable);
+    // Windows: a stream name (`x.exe::$DATA`, `notes.txt:x.exe`) hides what actually runs.
+    let stream = cfg!(windows)
+        && path
+            .file_name()
+            .is_some_and(|n| n.to_string_lossy().contains(':'));
+    let launchable =
+        stream || listed(LAUNCHABLE) || ext.as_deref().is_some_and(is_windows_executable);
     let bundle = cfg!(target_os = "macos") && listed(LAUNCHABLE_MACOS);
     if bundle || meta.is_file() && (is_executable(&meta) || launchable) {
         return Err(format!(
@@ -408,6 +414,8 @@ mod windows_tests {
         // Windows drops trailing dots and spaces: this opens setup.exe.
         assert!(refuse_open(&dir.join("setup.exe.")).is_err());
         assert!(refuse_open(&dir.join("setup.exe .")).is_err());
+        // A stream name opens the same file: `setup.exe::$DATA` is setup.exe.
+        assert!(refuse_open(&dir.join("setup.exe::$DATA")).is_err());
         for name in ["photo.png", "notes.txt", "doc.pdf"] {
             std::fs::write(dir.join(name), "x").unwrap();
             assert_eq!(refuse_open(&dir.join(name)), Ok(()), "{name}");

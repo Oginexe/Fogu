@@ -7,7 +7,8 @@
 //! On Linux these are the XDG directories (and still `$XDG_*`-aware); on Windows they are the
 //! roaming (`%APPDATA%`) and local (`%LOCALAPPDATA%`) app-data directories.
 
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::path::{Component, Path, PathBuf, Prefix};
 
 /// The application's directory name under the platform's config/state root.
 pub const APP_DIR: &str = "fogu";
@@ -93,14 +94,69 @@ pub fn system_known_hosts() -> Option<PathBuf> {
     }
 }
 
+/// Whether looking at `path` stays on this machine: `false` for a Windows UNC or device path
+/// (`\\host\share`, `//host/share`, `\\?\UNC\…`, `\\.\pipe\…`), where even a metadata
+/// lookup connects to the host and sends the user's NTLM credentials. Always `true` on Unix.
+#[must_use]
+pub fn is_local_path(path: &Path) -> bool {
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) => {
+            matches!(prefix.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_))
+        }
+        _ => true,
+    }
+}
+
+/// The first `name` in an absolute `PATH` directory. Relative entries (`.`, an empty entry) are
+/// skipped: they name the current directory, where anyone could drop a `pwsh.exe`.
+#[must_use]
+pub fn find_in_path(name: &str) -> Option<PathBuf> {
+    find_in(&std::env::var_os("PATH")?, name)
+}
+
+fn find_in(paths: &OsStr, name: &str) -> Option<PathBuf> {
+    std::env::split_paths(paths)
+        .filter(|dir| dir.is_absolute())
+        .map(|dir| dir.join(name))
+        .find(|path| path.is_file())
+}
+
 #[cfg(test)]
 mod tests {
+    #![expect(clippy::unwrap_used, reason = "tests")]
+
     use super::*;
 
     #[test]
     fn app_directories_end_with_the_app_name() {
         assert!(config_dir().ends_with(APP_DIR));
         assert!(state_dir().is_none_or(|dir| dir.ends_with(APP_DIR)));
+    }
+
+    #[test]
+    fn path_lookup_skips_relative_dirs() {
+        // Tests run in the crate directory, so `src/lib.rs` exists relative to it.
+        let abs = std::env::current_dir().unwrap().join("src");
+        assert_eq!(find_in("src".as_ref(), "lib.rs"), None);
+        assert_eq!(find_in(abs.as_os_str(), "lib.rs"), Some(abs.join("lib.rs")));
+    }
+
+    #[test]
+    fn network_and_device_paths_are_not_local() {
+        let remote = [
+            r"\\host\share\x",
+            "//host/share/x",
+            r"/\host\share",
+            r"\\?\UNC\host\share",
+            r"\\.\pipe\x",
+            r"\\?\GLOBALROOT\x",
+        ];
+        for p in remote {
+            assert_eq!(is_local_path(p.as_ref()), cfg!(unix), "{p}");
+        }
+        for p in [r"C:\x", r"\\?\C:\x", r"rel\x", r"\x", "/home/x"] {
+            assert!(is_local_path(p.as_ref()), "{p}");
+        }
     }
 
     #[test]

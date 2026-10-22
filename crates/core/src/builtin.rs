@@ -109,7 +109,7 @@ fn windows_profiles() -> Vec<Profile> {
         });
     };
 
-    let path = |name: &str| find_in_path(name);
+    let path = crate::platform::find_in_path;
     let system_root = std::env::var_os("SystemRoot").map(PathBuf::from);
     let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
 
@@ -127,14 +127,6 @@ fn windows_profiles() -> Vec<Profile> {
         add("Git Bash", files.join("Git/bin/bash.exe"));
     }
     out
-}
-
-#[cfg(windows)]
-fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|dir| dir.join(name))
-        .find(|path| path.is_file())
 }
 
 #[cfg(all(test, unix))]
