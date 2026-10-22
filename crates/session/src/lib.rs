@@ -6,7 +6,10 @@ mod env;
 mod local;
 mod pipeline;
 mod prompt;
-#[cfg(feature = "ssh")]
+#[cfg(all(feature = "ssh", unix))]
+mod secrets;
+#[cfg(all(feature = "ssh", windows))]
+#[path = "secrets_windows.rs"]
 mod secrets;
 pub mod sftp;
 #[cfg(feature = "ssh")]

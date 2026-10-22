@@ -295,7 +295,11 @@ mod tests {
         assert_eq!(numbered("a.tar.gz", 2).as_deref(), Some("a.tar (2).gz"));
         assert_eq!(numbered("notes", 3).as_deref(), Some("notes (3)"));
         assert_eq!(numbered(".bashrc", 1).as_deref(), Some(".bashrc (1)"));
+        #[cfg(unix)]
         assert_eq!(numbered("x.", 1).as_deref(), Some("x (1)."));
+        // Windows trims a trailing dot, so this candidate is not a usable local name.
+        #[cfg(windows)]
+        assert_eq!(numbered("x.", 1), None);
         assert_eq!(numbered(&"a".repeat(252), 1), None);
     }
 }

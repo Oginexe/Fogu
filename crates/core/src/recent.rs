@@ -88,8 +88,6 @@ impl Recent {
 mod tests {
     #![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
 
-    use std::os::unix::fs::PermissionsExt as _;
-
     use super::*;
 
     fn id(s: &str) -> ProfileId {
@@ -127,8 +125,13 @@ mod tests {
         recent.touch(&id("quick:me@h:2222"), 7);
         recent.touch(&id("work"), 9);
         recent.save(&path).unwrap();
-        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
         assert_eq!(Recent::load(&path).unwrap(), recent);
         std::fs::write(&path, "recent = 5").unwrap();
         assert!(Recent::load(&path).is_err());

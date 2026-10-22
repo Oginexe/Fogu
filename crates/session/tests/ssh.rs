@@ -119,7 +119,7 @@ fn a_refused_proxy_port_is_a_clear_proxy_error() {
         panic!("expected Proxy, got {end:?}");
     };
     assert!(
-        what.starts_with("SOCKS5 proxy 127.0.0.1:1: could not connect: Connection refused"),
+        what.starts_with("SOCKS5 proxy 127.0.0.1:1: could not connect:"),
         "{what}"
     );
     assert!(
@@ -128,6 +128,7 @@ fn a_refused_proxy_port_is_a_clear_proxy_error() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn a_failing_proxy_command_reports_its_last_stderr_line_sanitized() {
     let mut ssh = EffectiveSsh::new("127.0.0.1");

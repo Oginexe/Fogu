@@ -365,7 +365,7 @@ fn match_blocks_are_skipped_with_a_warning() {
     );
     assert_eq!(opts(&config, &env, "a").user.as_deref(), Some("one"));
     assert_eq!(opts(&config, &env, "b").user.as_deref(), Some("three"));
-    let path = env.home.join(".ssh/config");
+    let path = env.home.join(".ssh").join("config");
     assert_eq!(
         messages(&config),
         [format!(

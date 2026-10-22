@@ -139,13 +139,13 @@ fn ssh_hosts() -> crate::profiles::SshHosts {
     crate::profiles::SshHosts::from_process()
 }
 
-/// "Default shell" + the installed shells; test builds don't depend on the machine's
-/// `/etc/shells`.
+/// "Default shell" + the installed shells; test builds don't depend on the machine's shell
+/// list.
 fn builtins() -> Vec<fogu_core::Profile> {
     if cfg!(test) {
         return vec![fogu_core::Profile::default_shell()];
     }
-    fogu_core::builtin::builtin_profiles(std::path::Path::new(fogu_core::builtin::ETC_SHELLS))
+    fogu_core::builtin::builtin_shell_profiles()
 }
 
 impl App {

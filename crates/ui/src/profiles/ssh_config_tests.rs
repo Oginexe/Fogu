@@ -66,9 +66,13 @@ fn hosts_show_in_their_own_section_and_connect_with_the_ignored_options_listed()
     // The Match line is reported once, with file:line.
     let toast = app.toasts.iter().last().unwrap();
     assert_eq!(toast.title, "~/.ssh/config");
+    let config = Path::new("~").join(".ssh/config");
     assert_eq!(
         toast.detail,
-        "~/.ssh/config:7: Match blocks are not supported; block skipped"
+        format!(
+            "{}:7: Match blocks are not supported; block skipped",
+            config.display()
+        )
     );
 
     send(

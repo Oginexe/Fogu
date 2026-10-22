@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds a portable Linux x86_64 release and packs it for testers:
-#   dist/fogu-<version>-linux-x86_64.tar.gz  (binary, icons, .desktop entry, install.sh)
+#   dist/Fogu-<version>-linux-x86_64.tar.gz  (binary, icons, .desktop entry, install.sh)
 # The build runs in the manylinux_2_28 image (AlmaLinux 8, glibc 2.28) through Docker, so the
 # binary starts on Debian 10+, Ubuntu 20.04+, RHEL/Alma/Rocky 8+, Fedora, Arch and newer; the
 # release built on this machine needs the host's much newer glibc. Needs: docker. Downloads stay in the `fogu-cargo` volume between runs.
@@ -10,7 +10,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 toolchain=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
 image="fogu-build:manylinux228-$toolchain"
-name="fogu-$version-linux-x86_64"
+name="Fogu-$version-linux-x86_64"
 
 docker build --network host -q -t "$image" - <<EOF >/dev/null
 FROM quay.io/pypa/manylinux_2_28_x86_64

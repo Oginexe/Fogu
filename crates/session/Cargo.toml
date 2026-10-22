@@ -11,8 +11,6 @@ workspace = true
 fogu-core = { path = "../core" }
 fogu-term = { path = "../term" }
 tokio.workspace = true
-pty-process.workspace = true
-rustix.workspace = true
 bytes.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -22,13 +20,22 @@ russh-sftp = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 secrecy.workspace = true
 
-# The Secret Service (D-Bus); macOS uses the Keychain below.
-[target.'cfg(not(target_os = "macos"))'.dependencies]
+[target.'cfg(unix)'.dependencies]
+pty-process.workspace = true
+rustix.workspace = true
+
+# The Secret Service: every Unix but macOS (same cfg as `secrets.rs`); Windows has keyring.
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 oo7 = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+portable-pty.workspace = true
+keyring = { workspace = true, optional = true }
+fs4 = { version = "1.1.0", default-features = false }
 
 [features]
 default = ["ssh"]
@@ -43,6 +50,7 @@ ssh = [
     "dep:oo7",
     "dep:security-framework",
     "dep:serde_json",
+    "dep:keyring",
 ]
 
 [[example]]

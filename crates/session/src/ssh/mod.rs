@@ -9,6 +9,10 @@
 //! texts are sanitized ([`sanitize_remote`]); channel data goes through the terminal like any
 //! program output. Secrets exist only as `SecretString` and are exposed only at the russh call.
 
+#[cfg(unix)]
+mod agent;
+#[cfg(windows)]
+#[path = "agent_windows.rs"]
 mod agent;
 pub mod algorithms;
 mod auth;
@@ -21,6 +25,10 @@ mod proxy;
 pub(crate) mod sftp;
 mod shell;
 mod transport;
+#[cfg(unix)]
+mod x11;
+#[cfg(windows)]
+#[path = "x11_windows.rs"]
 mod x11;
 
 use std::path::{Path, PathBuf};
@@ -63,15 +71,15 @@ impl SshPaths {
     pub fn in_config_dir(config_dir: &Path) -> Self {
         Self {
             known_hosts: config_dir.join("known_hosts"),
-            system_known_hosts: std::env::var_os("HOME")
-                .map(|home| PathBuf::from(home).join(".ssh/known_hosts")),
+            system_known_hosts: fogu_core::platform::home_dir()
+                .map(|home| home.join(".ssh").join("known_hosts")),
         }
     }
 
-    /// [`Self::in_config_dir`] of `$XDG_CONFIG_HOME/fogu`.
+    /// [`Self::in_config_dir`] of the platform config directory.
     #[must_use]
     pub fn default_for_user() -> Self {
-        Self::in_config_dir(&fogu_core::config::config_dir(None))
+        Self::in_config_dir(&fogu_core::platform::config_dir())
     }
 
     fn files(&self) -> Vec<PathBuf> {

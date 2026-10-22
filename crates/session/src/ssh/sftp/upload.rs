@@ -5,7 +5,6 @@
 //! overwrite, with the local permission bits minus setuid/setgid/sticky.
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -23,6 +22,22 @@ use crate::sftp::{
     ConflictKind, EntryKind, KEEP_BOTH_MAX, NameError, OverwritePolicy, SftpEvent, SftpOptions,
     SkipReason, TransferReport,
 };
+
+/// Permission bits reported for a local file. Windows has no POSIX mode: use the usual 0644
+/// default; the remote side applies its own umask anyway.
+fn local_mode(meta: &fs::Metadata) -> u32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        meta.permissions().mode() & 0o777
+    }
+    #[cfg(windows)]
+    {
+        let _ = meta;
+        0o644
+    }
+}
 
 /// One file to send.
 struct Job {
@@ -119,7 +134,7 @@ async fn run(
                     .ok()
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs()),
-                mode: meta.permissions().mode() & 0o777,
+                mode: local_mode(&meta),
                 overwrite,
                 resume,
                 progress: Arc::clone(&progress),

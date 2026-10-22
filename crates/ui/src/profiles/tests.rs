@@ -5,7 +5,6 @@
     reason = "tests"
 )]
 
-use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -269,10 +268,15 @@ fn enter_connects_the_top_hit_and_records_recent_0600() {
     let file = t.0.join("state").join(fogu_core::recent::RECENT_FILE);
     let saved = Recent::load(&file).unwrap();
     assert_eq!(saved.recent[0].id, id("box"));
-    assert_eq!(
-        std::fs::metadata(&file).unwrap().permissions().mode() & 0o777,
-        0o600
-    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        assert_eq!(
+            std::fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
     // ↓ + Enter walks the visible items (Recent's "Web box", then the group's).
     send(&mut app, ProfilesMsg::Move(1));
     send(&mut app, ProfilesMsg::Move(1));

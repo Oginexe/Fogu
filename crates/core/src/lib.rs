@@ -9,6 +9,7 @@ pub mod builtin;
 pub mod config;
 pub mod fsutil;
 mod keychord;
+pub mod platform;
 mod profile;
 mod quick_connect;
 pub mod recent;

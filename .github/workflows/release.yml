@@ -31,7 +31,7 @@ jobs:
       # the layout scripts/install.sh expects, so the archive installs with the same script
       - name: package
         run: |
-          d="fogu-${{ matrix.name }}"
+          d="Fogu-${{ matrix.name }}"
           mkdir -p "$d/target/release" "$d/scripts" "$d/assets/icons"
           cp target/release/fogu "$d/target/release/"
           cp scripts/install.sh "$d/scripts/"
@@ -54,9 +54,9 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool Fogu.AppDir Fogu-x86_64.AppImage
       - uses: actions/upload-artifact@v7
         with:
-          name: fogu-${{ matrix.name }}
+          name: Fogu-${{ matrix.name }}
           path: |
-            fogu-${{ matrix.name }}.tar.gz
+            Fogu-${{ matrix.name }}.tar.gz
             Fogu-x86_64.AppImage
           if-no-files-found: ignore
   release:
@@ -68,7 +68,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
-      - run: sha256sum fogu-*.tar.gz Fogu-*.AppImage > SHA256SUMS
-      - run: gh release create "$GITHUB_REF_NAME" fogu-*.tar.gz Fogu-*.AppImage SHA256SUMS --repo "$GITHUB_REPOSITORY" --generate-notes
+      - run: sha256sum Fogu-*.tar.gz Fogu-*.AppImage > SHA256SUMS
+      - run: gh release create "$GITHUB_REF_NAME" Fogu-*.tar.gz Fogu-*.AppImage SHA256SUMS --repo "$GITHUB_REPOSITORY" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}

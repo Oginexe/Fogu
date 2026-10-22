@@ -115,6 +115,7 @@ pub fn run(config: Arc<Config>, options: RunOptions) -> Result {
         icon: iced::window::icon::from_rgba(ICON_RGBA.to_vec(), ICON_SIZE, ICON_SIZE).ok(),
         #[cfg(target_os = "linux")]
         platform_specific: iced::window::settings::PlatformSpecific {
+            #[cfg(unix)]
             application_id: APP_ID.to_owned(),
             ..Default::default()
         },

@@ -4,6 +4,7 @@ use std::io::Write as _;
 use std::os::unix::fs::{PermissionsExt as _, symlink};
 use std::path::PathBuf;
 
+use super::super::{NAME_MAX, file_mode, part_name};
 use super::*;
 
 struct Tmp(PathBuf);
@@ -61,11 +62,10 @@ fn a_planted_symlink_is_never_written_through() {
     let dir = LocalDir::open(&dest).unwrap();
     let fd = dir.open_dir(&[]).unwrap();
     for truncate in [false, true] {
-        let err =
-            create_file(fd.as_fd(), "report.txt", file_mode(None, false), truncate).unwrap_err();
+        let err = create_file(&fd, "report.txt", file_mode(None, false), truncate).unwrap_err();
         assert!(err.raw_os_error().is_some(), "{err}");
     }
-    assert!(open_for_resume(fd.as_fd(), "report.txt").is_err());
+    assert!(open_for_resume(&fd, "report.txt").is_err());
     assert_eq!(existing(&fd, "report.txt").unwrap(), Existing::Other);
     assert_eq!(std::fs::read_to_string(&outside).unwrap(), "precious");
 }
@@ -93,29 +93,29 @@ fn create_is_exclusive_and_finish_never_replaces_unless_asked() {
     let tmp = Tmp::new("finish");
     let dir = LocalDir::open(&tmp.0).unwrap();
     let fd = dir.open_dir(&[]).unwrap();
-    let mut part = create_file(fd.as_fd(), "a.part", file_mode(Some(0o755), true), false).unwrap();
+    let mut part = create_file(&fd, "a.part", file_mode(Some(0o755), true), false).unwrap();
     part.write_all(b"new").unwrap();
-    assert!(create_file(fd.as_fd(), "a.part", file_mode(None, false), false).is_err());
+    assert!(create_file(&fd, "a.part", file_mode(None, false), false).is_err());
     let mode = std::fs::metadata(tmp.0.join("a.part"))
         .unwrap()
         .permissions()
         .mode();
     assert_eq!(mode & 0o7000, 0);
     std::fs::write(tmp.0.join("a"), "old").unwrap();
-    let err = finish(fd.as_fd(), "a.part", "a", false).unwrap_err();
+    let err = finish(&fd, "a.part", "a", false).unwrap_err();
     assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
     assert_eq!(std::fs::read_to_string(tmp.0.join("a")).unwrap(), "old");
-    finish(fd.as_fd(), "a.part", "a", true).unwrap();
+    finish(&fd, "a.part", "a", true).unwrap();
     assert_eq!(std::fs::read_to_string(tmp.0.join("a")).unwrap(), "new");
     assert!(!tmp.0.join("a.part").exists());
     let (_, len) = {
-        create_file(fd.as_fd(), "b.part", file_mode(None, false), false)
+        create_file(&fd, "b.part", file_mode(None, false), false)
             .unwrap()
             .write_all(b"12345")
             .unwrap();
-        open_for_resume(fd.as_fd(), "b.part").unwrap()
+        open_for_resume(&fd, "b.part").unwrap()
     };
     assert_eq!(len, 5);
-    remove(fd.as_fd(), "b.part").unwrap();
+    remove(&fd, "b.part").unwrap();
     assert!(!tmp.0.join("b.part").exists());
 }

@@ -10,7 +10,6 @@
 
 use std::collections::VecDeque;
 use std::io::SeekFrom;
-use std::os::fd::{AsFd as _, OwnedFd};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -18,7 +17,7 @@ use russh_sftp::protocol::FileAttributes;
 use tokio::io::{AsyncSeekExt as _, AsyncWriteExt as _};
 
 use super::disk_guard::{Every, FileCap, Guard};
-use super::local_fs::{self, Existing, LocalDir, validate_name};
+use super::local_fs::{self, DirHandle, Existing, LocalDir, validate_name};
 use super::ops::{WalkBudget, join, last_component};
 use super::remote::kind_of;
 use super::transfer::{
@@ -268,12 +267,12 @@ async fn fetch(ctx: &Ctx, job: Job) -> FileEnd {
         Ok(opened) => opened,
         Err(end) => return end,
     };
-    let end = match job.guard.fits(dir.as_fd(), job.size.saturating_sub(offset)) {
+    let end = match job.guard.fits(&dir, job.size.saturating_sub(offset)) {
         Ok(()) => stream(ctx, &job, file, offset, &dir).await,
         Err(message) => FileEnd::Failed(message),
     };
     let end = match end {
-        FileEnd::Done { bytes } => match local_fs::finish(dir.as_fd(), &part, name, replace) {
+        FileEnd::Done { bytes } => match local_fs::finish(&dir, &part, name, replace) {
             Ok(()) => return FileEnd::Done { bytes },
             // Someone created the target meanwhile: keep the complete `.part`, report it.
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
@@ -285,7 +284,7 @@ async fn fetch(ctx: &Ctx, job: Job) -> FileEnd {
     };
     // A resumed `.part` existed before this run: never delete what this run did not create.
     if !ctx.opts.keep_partial && created {
-        let _best_effort = local_fs::remove(dir.as_fd(), &part);
+        let _best_effort = local_fs::remove(&dir, &part);
     }
     end
 }
@@ -295,7 +294,7 @@ async fn fetch(ctx: &Ctx, job: Job) -> FileEnd {
 /// resuming would pass the cap) is left alone unless the user chose `Overwrite`.
 fn open_part(
     job: &Job,
-    dir: &OwnedFd,
+    dir: &DirHandle,
     part: &str,
     keep_exec: bool,
 ) -> Result<(std::fs::File, u64, bool), FileEnd> {
@@ -303,11 +302,11 @@ fn open_part(
     let mode = local_fs::file_mode(job.mode, keep_exec);
     match local_fs::existing(dir, part).map_err(failed)? {
         Existing::Nothing => {
-            let file = local_fs::create_file(dir.as_fd(), part, mode, false).map_err(failed)?;
+            let file = local_fs::create_file(dir, part, mode, false).map_err(failed)?;
             Ok((file, 0, true))
         }
         Existing::File if job.resume => {
-            let (file, len) = local_fs::open_for_resume(dir.as_fd(), part).map_err(failed)?;
+            let (file, len) = local_fs::open_for_resume(dir, part).map_err(failed)?;
             // `.part` + remaining must stay within the cap; the cap is ≤ the reported size
             // unless growing files are allowed, and a `.part` longer than the remote file is
             // not a prefix of it either way.
@@ -334,14 +333,14 @@ fn open_part(
                     end => end,
                 });
             }
-            let file = local_fs::create_file(dir.as_fd(), part, mode, true).map_err(failed)?;
+            let file = local_fs::create_file(dir, part, mode, true).map_err(failed)?;
             Ok((file, 0, true))
         }
     }
 }
 
 /// Whether the existing `.part` looks like an earlier, interrupted download of this file.
-fn part_resumable(job: &Job, dir: &OwnedFd, part: &str) -> bool {
+fn part_resumable(job: &Job, dir: &DirHandle, part: &str) -> bool {
     let Ok(Some((len, mtime))) = local_fs::file_info(dir, part) else {
         return false;
     };
@@ -351,7 +350,7 @@ fn part_resumable(job: &Job, dir: &OwnedFd, part: &str) -> bool {
 
 /// "Keep both": `name` itself when neither it nor its `.part` exists, else the first free
 /// `name (n)` (checked the same way, symlinks not followed).
-fn free_name(dir: &OwnedFd, name: &str) -> Result<String, FileEnd> {
+fn free_name(dir: &DirHandle, name: &str) -> Result<String, FileEnd> {
     let free = |candidate: &str| -> std::io::Result<bool> {
         let Some(part) = local_fs::part_name(candidate) else {
             return Ok(false);
@@ -390,7 +389,13 @@ impl From<std::io::Error> for Halt {
 /// Copies the remote file from `offset` into `file`, then flushes and syncs it. Before each
 /// chunk is written the file's cap is checked (nothing past it ever reaches the disk), and every
 /// [`CHECK_EVERY`](super::disk_guard::CHECK_EVERY) bytes the free-space reserve of `dir`.
-async fn stream(ctx: &Ctx, job: &Job, file: std::fs::File, offset: u64, dir: &OwnedFd) -> FileEnd {
+async fn stream(
+    ctx: &Ctx,
+    job: &Job,
+    file: std::fs::File,
+    offset: u64,
+    dir: &DirHandle,
+) -> FileEnd {
     let handle = match ctx.remote.open_read(&job.remote).await {
         Ok(handle) => handle,
         Err(err) => return FileEnd::Failed(err.message),
@@ -419,7 +424,7 @@ async fn stream(ctx: &Ctx, job: &Job, file: std::fs::File, offset: u64, dir: &Ow
                 return Err(Halt::Stop(cap.exceeded()));
             }
             if every.due(len) {
-                job.guard.above_reserve(dir.as_fd()).map_err(Halt::Stop)?;
+                job.guard.above_reserve(dir).map_err(Halt::Stop)?;
             }
             out.write_all(&data).await?;
             bytes += len;

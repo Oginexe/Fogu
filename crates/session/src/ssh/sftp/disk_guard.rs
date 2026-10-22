@@ -14,9 +14,9 @@
 
 use std::fmt::Write as _;
 use std::io;
-use std::os::fd::BorrowedFd;
 use std::sync::Arc;
 
+use super::local_fs::DirHandle;
 use crate::sftp::SftpOptions;
 
 /// Bytes written between two free-space probes during one file.
@@ -30,21 +30,21 @@ pub(crate) struct Space {
 
 /// Reports the free space of the filesystem holding a directory.
 pub(crate) trait FreeSpace: Send + Sync {
-    fn probe(&self, dir: BorrowedFd<'_>) -> io::Result<Space>;
+    fn probe(&self, dir: &DirHandle) -> io::Result<Space>;
 }
 
 /// The engine's probe.
 pub(crate) type SpaceProbe = Arc<dyn FreeSpace>;
 
-/// `fstatvfs(2)` on the destination directory fd.
+/// Free space of the destination filesystem (`fstatvfs` on Unix, `GetDiskFreeSpaceExW` on
+/// Windows).
 #[derive(Debug)]
 pub(crate) struct Statvfs;
 
 impl FreeSpace for Statvfs {
-    fn probe(&self, dir: BorrowedFd<'_>) -> io::Result<Space> {
-        let st = rustix::fs::fstatvfs(dir)?;
+    fn probe(&self, dir: &DirHandle) -> io::Result<Space> {
         Ok(Space {
-            avail: st.f_bavail.saturating_mul(st.f_frsize),
+            avail: super::local_fs::available_space(dir)?,
         })
     }
 }
@@ -119,7 +119,7 @@ impl Guard {
     }
 
     /// `Ok` if `needed` more bytes fit in `dir`'s filesystem above the reserve.
-    pub(crate) fn fits(&self, dir: BorrowedFd<'_>, needed: u64) -> Result<(), String> {
+    pub(crate) fn fits(&self, dir: &DirHandle, needed: u64) -> Result<(), String> {
         let space = self.space(dir)?;
         let reserve = self.opts.free_space_reserve_bytes;
         if needed.saturating_add(reserve) <= space.avail {
@@ -135,7 +135,7 @@ impl Guard {
     }
 
     /// `Ok` while `dir`'s filesystem still has the reserve free (checked during a write).
-    pub(crate) fn above_reserve(&self, dir: BorrowedFd<'_>) -> Result<(), String> {
+    pub(crate) fn above_reserve(&self, dir: &DirHandle) -> Result<(), String> {
         let space = self.space(dir)?;
         let reserve = self.opts.free_space_reserve_bytes;
         if space.avail >= reserve {
@@ -147,7 +147,7 @@ impl Guard {
     }
 
     /// Fails closed: a filesystem whose free space can't be read gets no download.
-    fn space(&self, dir: BorrowedFd<'_>) -> Result<Space, String> {
+    fn space(&self, dir: &DirHandle) -> Result<Space, String> {
         self.probe
             .probe(dir)
             .map_err(|err| format!("cannot check local free space: {err}"))
@@ -176,8 +176,7 @@ impl Every {
 mod tests {
     #![expect(clippy::unwrap_used, reason = "tests")]
 
-    use std::os::fd::AsFd as _;
-
+    use super::super::local_fs::LocalDir;
     use super::*;
 
     #[test]
@@ -214,8 +213,8 @@ mod tests {
 
     #[test]
     fn statvfs_reads_the_temp_filesystem() {
-        let dir = std::fs::File::open(std::env::temp_dir()).unwrap();
-        let space = Statvfs.probe(dir.as_fd()).unwrap();
+        let dir = LocalDir::open(&std::env::temp_dir()).unwrap();
+        let space = Statvfs.probe(dir.fd()).unwrap();
         assert!(space.avail > 0, "{space:?}");
     }
 

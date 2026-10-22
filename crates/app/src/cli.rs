@@ -1,5 +1,6 @@
 //! Command-line flags.
 
+#[cfg(unix)]
 use std::os::unix::process::CommandExt as _;
 use std::path::PathBuf;
 use std::process::Command;
@@ -39,11 +40,33 @@ pub fn reexec_for_software_render(cli: &Cli) {
         eprintln!("fogu: --software-render: cannot find own executable; using the GPU");
         return;
     };
-    let err = Command::new(exe)
+    let mut command = Command::new(exe);
+    command
         .args(std::env::args_os().skip(1))
-        .env(BACKEND_ENV, "tiny-skia")
-        .exec();
-    eprintln!("fogu: --software-render: re-exec failed ({err}); using the GPU");
+        .env(BACKEND_ENV, "tiny-skia");
+    #[cfg(unix)]
+    {
+        let err = command.exec();
+        eprintln!("fogu: --software-render: re-exec failed ({err}); using the GPU");
+    }
+    #[cfg(windows)]
+    {
+        // Windows has no `exec`: start the child (which sees the environment variable and
+        // skips this branch), wait for it and relay its exit code.
+        match command.spawn() {
+            Ok(mut child) => match child.wait() {
+                Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+                Err(err) => {
+                    eprintln!(
+                        "fogu: --software-render: cannot wait for the re-exec ({err}); using the GPU"
+                    );
+                }
+            },
+            Err(err) => {
+                eprintln!("fogu: --software-render: re-exec failed ({err}); using the GPU");
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -557,9 +557,10 @@ pub fn strip_ssh(p: &SshOpts, d: &SshOpts) -> SshOpts {
     out
 }
 
-/// `$USER`, else `root`.
+/// `$USER` (`%USERNAME%` on Windows), else `root`.
 pub(crate) fn local_user() -> String {
     std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
         .ok()
         .filter(|user| !user.is_empty())
         .unwrap_or_else(|| "root".to_owned())

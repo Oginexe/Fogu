@@ -7,7 +7,8 @@ use std::path::Path;
 
 use crate::profile::{LocalOpts, Profile, ProfileId, ProfileKind};
 
-/// The system's list of login shells.
+/// The system's list of login shells (Unix).
+#[cfg(unix)]
 pub const ETC_SHELLS: &str = "/etc/shells";
 /// Id prefix of every built-in profile (they can't be edited, moved or deleted).
 pub const BUILTIN_PREFIX: &str = "builtin:";
@@ -73,7 +74,70 @@ pub fn builtin_profiles(shells: &Path) -> Vec<Profile> {
     out
 }
 
-#[cfg(test)]
+/// The built-in local profiles for this platform: `/etc/shells` on Unix, the usual Windows
+/// shells discovered from the system on Windows.
+#[must_use]
+pub fn builtin_shell_profiles() -> Vec<Profile> {
+    #[cfg(unix)]
+    {
+        builtin_profiles(Path::new(ETC_SHELLS))
+    }
+    #[cfg(windows)]
+    {
+        windows_profiles()
+    }
+}
+
+#[cfg(windows)]
+fn windows_profiles() -> Vec<Profile> {
+    use std::path::PathBuf;
+
+    let mut out = vec![Profile::default_shell()];
+    let mut add = |name: &str, program: PathBuf| {
+        if !program.is_file() {
+            return;
+        }
+        let program = program.to_string_lossy().into_owned();
+        out.push(Profile {
+            id: ProfileId(format!("{BUILTIN_PREFIX}local:{program}")),
+            name: name.to_owned(),
+            kind: ProfileKind::Local(LocalOpts {
+                program: Some(program),
+                ..LocalOpts::default()
+            }),
+            ..Profile::default_shell()
+        });
+    };
+
+    let path = |name: &str| find_in_path(name);
+    let system_root = std::env::var_os("SystemRoot").map(PathBuf::from);
+    let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
+
+    if let Some(pwsh) = path("pwsh.exe") {
+        add("PowerShell 7", pwsh);
+    }
+    if let Some(root) = system_root {
+        add(
+            "Windows PowerShell",
+            root.join("System32/WindowsPowerShell/v1.0/powershell.exe"),
+        );
+        add("Command Prompt", root.join("System32/cmd.exe"));
+    }
+    if let Some(files) = program_files {
+        add("Git Bash", files.join("Git/bin/bash.exe"));
+    }
+    out
+}
+
+#[cfg(windows)]
+fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(name))
+        .find(|path| path.is_file())
+}
+
+#[cfg(all(test, unix))]
 mod tests {
     #![expect(
         clippy::unwrap_used,

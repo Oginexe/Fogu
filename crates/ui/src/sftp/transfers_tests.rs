@@ -223,6 +223,7 @@ fn reissue_uploads_map_back_to_their_source() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn real_subdir_refuses_symlinked_components() {
     let base = std::env::temp_dir().join(format!("fogu-ui-subdir-{}", std::process::id()));

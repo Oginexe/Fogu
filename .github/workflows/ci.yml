@@ -57,6 +57,19 @@ jobs:
       # FOGU_REQUIRE_SSHD unset: the SSH tests run where the runner's sshd starts, else skip
       - run: cargo nextest run --workspace --locked --no-tests=pass
       - run: cargo test --doc --workspace --locked
+  # the Windows build (alpha): ConPTY, Credential Manager, the agent pipe and the SFTP path checks
+  check-windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      # no sshd on the runner: the SSH integration tests skip themselves
+      - run: cargo nextest run --workspace --locked --no-tests=pass
+      - run: cargo test --doc --workspace --locked
   fuzz-smoke:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-24.04

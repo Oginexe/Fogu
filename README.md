@@ -123,13 +123,13 @@ second and stays out of your way.
 
 ## Install
 
-Linux (X11 and Wayland) and macOS (Apple Silicon and Intel). No root needed.
+Linux (X11 and Wayland), macOS (Apple Silicon and Intel) and Windows 10/11 (alpha). No root needed.
 
 ### Linux
 
 ```bash
-curl -fsSL https://github.com/Revdep/Fogu/releases/latest/download/fogu-linux-x86_64.tar.gz | tar xz
-cd fogu-linux-x86_64 && ./scripts/install.sh
+curl -fsSL https://github.com/Revdep/Fogu/releases/latest/download/Fogu-linux-x86_64.tar.gz | tar xz
+cd Fogu-linux-x86_64 && ./scripts/install.sh
 ```
 
 Or the single-file AppImage:
@@ -144,8 +144,8 @@ Needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36, Arch Linux).
 ### macOS
 
 ```bash
-curl -fsSL https://github.com/Revdep/Fogu/releases/latest/download/fogu-macos-aarch64.tar.gz | tar xz
-cd fogu-macos-aarch64 && ./scripts/install.sh
+curl -fsSL https://github.com/Revdep/Fogu/releases/latest/download/Fogu-macos-aarch64.tar.gz | tar xz
+cd Fogu-macos-aarch64 && ./scripts/install.sh
 ```
 
 On Intel Macs use `macos-x86_64` instead of `macos-aarch64`. Fogu then shows up in Applications.
@@ -153,7 +153,7 @@ On Intel Macs use `macos-x86_64` instead of `macos-aarch64`. Fogu then shows up 
 Downloaded with a browser instead of `curl`? Fogu is not notarized by Apple, so unblock it first:
 
 ```bash
-xattr -dr com.apple.quarantine fogu-macos-*
+xattr -dr com.apple.quarantine Fogu-macos-*
 ```
 
 <details>
@@ -167,6 +167,33 @@ xattr -dr com.apple.quarantine fogu-macos-*
 - **Passwords** are stored in the login Keychain (service `fogu`). After an update macOS may ask
   once to allow access.
 - **Cmd+Q** skips the final save: tabs come back, the last ~30 s of scrollback may not.
+
+</details>
+
+### Windows (alpha)
+
+No prebuilt download yet: build it with [rustup](https://rustup.rs) (its installer sets up the
+Visual Studio C++ Build Tools Rust needs). In PowerShell:
+
+```powershell
+git clone https://github.com/Revdep/Fogu.git
+cd Fogu; cargo install --path crates/app --locked
+```
+
+Then run `fogu`. To remove it: `cargo uninstall fogu`.
+
+<details>
+<summary>Good to know on Windows</summary>
+
+- **Shell:** new tabs open `pwsh`, then Windows PowerShell, then `cmd`, whichever is found first.
+- **Config** lives in `%APPDATA%\fogu\config.toml`; hosts are read from `%USERPROFILE%\.ssh\config`.
+- **Passwords** are stored in the Windows Credential Manager.
+- **SSH agent:** Fogu uses the Windows OpenSSH agent. Start it once in an admin PowerShell with
+  `Set-Service ssh-agent -StartupType Automatic; Start-Service ssh-agent`.
+- **Closing a tab** ends everything started in it, except programs that detach themselves
+  (`start`).
+- **Alpha limits:** a new tab or split opens in the current folder only when the shell reports it
+  (OSC 7), and the "command finished" notification is not available yet.
 
 </details>
 

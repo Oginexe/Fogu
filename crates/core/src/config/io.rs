@@ -1,7 +1,6 @@
 //! Config file I/O: XDG path, atomic in-place writes, load with graceful fallback.
 
 use std::io::Write as _;
-use std::os::unix::fs::OpenOptionsExt as _;
 use std::path::{Path, PathBuf};
 
 use super::Config;
@@ -9,9 +8,6 @@ use crate::background::{Background, Fit};
 
 /// The config file's name inside [`config_dir`].
 pub(super) const FILE_NAME: &str = "config.toml";
-/// Permissions for the config file and its backup (may contain nothing secret today, but
-/// `profiles` will later carry hostnames/usernames some users consider sensitive).
-const FILE_MODE: u32 = 0o600;
 
 /// Something went wrong loading or saving the config file.
 #[derive(Debug, thiserror::Error)]
@@ -53,16 +49,11 @@ impl ConfigError {
     }
 }
 
-/// `$XDG_CONFIG_HOME/fogu` (default `~/.config/fogu`), or `override_dir` verbatim when
-/// given (the `--config-dir` CLI flag).
+/// The platform config directory (`$XDG_CONFIG_HOME/fogu`, `%APPDATA%\fogu`), or
+/// `override_dir` verbatim when given (the `--config-dir` CLI flag).
 #[must_use]
 pub fn config_dir(override_dir: Option<&Path>) -> PathBuf {
-    if let Some(dir) = override_dir {
-        return dir.to_path_buf();
-    }
-    xdg::BaseDirectories::with_prefix("fogu")
-        .get_config_home()
-        .unwrap_or_else(|| PathBuf::from(".config/fogu"))
+    override_dir.map_or_else(crate::platform::config_dir, Path::to_path_buf)
 }
 
 /// Loads `config.toml` from `dir`. A missing file is not an error (returns `Config::default()`);
@@ -192,11 +183,7 @@ pub(super) fn write_atomic(dir: &Path, contents: &[u8]) -> Result<(), ConfigErro
     let bak = dir.join(format!("{FILE_NAME}.bak"));
     match std::fs::rename(&dest, &bak) {
         // The user's original may have been created 0644; the backup is private too.
-        Ok(()) => {
-            use std::os::unix::fs::PermissionsExt as _;
-            std::fs::set_permissions(&bak, std::fs::Permissions::from_mode(FILE_MODE))
-                .map_err(|err| ConfigError::io(&bak, err))?;
-        }
+        Ok(()) => crate::fsutil::restrict_file(&bak).map_err(|err| ConfigError::io(&bak, err))?,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => return Err(ConfigError::io(&dest, err)),
     }
@@ -204,13 +191,8 @@ pub(super) fn write_atomic(dir: &Path, contents: &[u8]) -> Result<(), ConfigErro
 }
 
 fn write_new_file(path: &Path, contents: &[u8]) -> Result<(), ConfigError> {
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(FILE_MODE)
-        .open(path)
-        .map_err(|err| ConfigError::io(path, err))?;
+    let mut file =
+        crate::fsutil::open_private_truncate(path).map_err(|err| ConfigError::io(path, err))?;
     file.write_all(contents)
         .map_err(|err| ConfigError::io(path, err))?;
     file.sync_all().map_err(|err| ConfigError::io(path, err))
@@ -332,11 +314,17 @@ background = { color = \"#112233\" }   # keep me
         let (config, err) = load(tmp.path());
         assert!(err.is_none());
         assert_eq!(config.profiles[0].background, Some(bg));
-        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode(&path), FILE_MODE);
         let bak = tmp.path().join(format!("{FILE_NAME}.bak"));
         assert_eq!(std::fs::read_to_string(&bak).unwrap(), FIXTURE);
-        assert_eq!(mode(&bak), FILE_MODE);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            // The file and its backup are written through `fsutil`, private on Unix.
+            let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode(&path), crate::fsutil::FILE_MODE);
+            assert_eq!(mode(&bak), crate::fsutil::FILE_MODE);
+        }
     }
 
     #[test]
@@ -392,8 +380,6 @@ background = { color = \"#112233\" }   # keep me
         assert!(matches!(err, ConfigError::Io { .. }), "{err}");
         assert!(!path.exists());
     }
-
-    use std::os::unix::fs::PermissionsExt as _;
 
     /// A tiny unique-per-test temp dir under the system temp dir, removed on drop.
     struct TempDir(PathBuf);

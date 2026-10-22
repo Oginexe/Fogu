@@ -74,8 +74,6 @@ pub fn install(state_dir: Option<PathBuf>) {
 mod tests {
     #![expect(clippy::unwrap_used, reason = "tests")]
 
-    use std::os::unix::fs::PermissionsExt as _;
-
     use super::*;
 
     #[test]
@@ -95,8 +93,13 @@ mod tests {
         append_entry(&dir, "one\n").unwrap();
         append_entry(&dir, "two\n").unwrap();
         let log = dir.join("crash.log");
-        let mode = std::fs::metadata(&log).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            let mode = std::fs::metadata(&log).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
         assert_eq!(std::fs::read_to_string(&log).unwrap(), "one\ntwo\n");
         std::fs::remove_dir_all(&dir).unwrap();
     }

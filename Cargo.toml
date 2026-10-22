@@ -11,7 +11,7 @@ members = [
 [workspace.package]
 edition = "2024"
 license = "MIT"
-version = "0.1.5"
+version = "0.1.6"
 
 [workspace.dependencies]
 # why: the GUI toolkit. Pinned to the exact
@@ -44,12 +44,15 @@ tracing-appender = "0.2.5"
 # why: async runtime for session tasks; multi-thread rt, mpsc, child
 # process wait, timers, `select!`.
 # `net`: TCP for russh's `client::connect`.
-tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "process", "io-util", "time", "macros", "net"] }
-# why: tokio-native PTY open/spawn/resize without unsafe in our code.
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "process", "io-util", "time", "macros", "net", "fs"] }
+# why: tokio-native PTY open/spawn/resize without unsafe in our code (Unix).
 pty-process = { version = "0.5.3", features = ["async"] }
 # why: safe `dup`, `tcsetwinsize`, `getuid`, process-group SIGKILL and `uname`; already in the
 # tree via pty-process.
 rustix = { version = "1.1.5", features = ["termios", "process", "fs", "system"] }
+# why: ConPTY on Windows and Unix PTYs behind one safe API. Used only by the Windows local
+# session; the Unix path keeps `pty-process` and its direct fd control.
+portable-pty = "0.9.0"
 # why: cheap shareable byte buffers for `SessionInput::Data` and the pending-write queue.
 bytes = "1.12.1"
 # why: one error enum per library domain (`SessionError`).
@@ -76,6 +79,10 @@ toml_edit = "0.25.17"
 # so `directories`' per-OS path logic is not needed; `xdg` is the smaller crate for exactly the
 # XDG Base Directory spec we need (it builds on any unix).
 xdg = "3.0.0"
+# why: platform config/state/home/download directories. `dirs` respects the XDG
+# variables on Linux and the known folders on Windows, so one crate covers both
+# targets without carrying a Linux-only dependency into the Windows build.
+dirs = "7.0.0"
 
 # why: the SSH client: pure Rust, tokio-native, actively maintained. `ring` backend instead of
 # the default `aws-lc-rs` (C/cmake, banned in deny.toml); `flate2` for zlib compression. No
@@ -102,15 +109,17 @@ secrecy = "0.10.3"
 oo7 = { version = "0.6.0", default-features = false, features = ["tokio", "native_crypto"] }
 # why: macOS only: stored passwords in the login Keychain (generic passwords, safe API).
 security-framework = "3.7.0"
+# why: Windows Credential Manager through a safe API (no `unsafe` in our code). The Linux
+# build keeps `oo7`/Secret Service; only the Windows target pulls `windows-native`.
+keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
 
 # why: native file pickers for SFTP upload/download.
 # Only the `xdg-portal` backend (D-Bus portal, zenity fallback): no GTK, no `wayland` feature (the
 # portal needs no Wayland handle since we open the dialog without a parent window).
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
-# why: the XDG download directory (`~/Downloads`, honours `user-dirs.dirs`) for SFTP double-click
-# downloads; `xdg` covers only the base-directory spec, not user dirs.
-dirs = "7.0.0"
-
+# why: opening a path or URL with the desktop's default application (`xdg-open` on Linux,
+# `ShellExecute` on Windows) through one safe API.
+open = "5.4.4"
 # why: decoding tab background images with size/dimension limits and downscaling; the same
 # 0.25 crate iced's image feature already depends on (one version in the tree), only the three
 # formats we accept (PNG, JPEG, WebP; all pure-Rust decoders).

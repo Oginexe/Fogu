@@ -10,7 +10,6 @@
 
 use std::collections::HashMap;
 use std::io;
-use std::os::fd::BorrowedFd;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -292,7 +291,7 @@ impl Scripted {
 }
 
 impl FreeSpace for Scripted {
-    fn probe(&self, _dir: BorrowedFd<'_>) -> io::Result<Space> {
+    fn probe(&self, _dir: &super::local_fs::DirHandle) -> io::Result<Space> {
         let i = self.calls.fetch_add(1, Ordering::Relaxed);
         let answer = self.answers.get(i).or(self.answers.last());
         Ok(*answer.unwrap())

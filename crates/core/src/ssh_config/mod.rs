@@ -48,10 +48,10 @@ pub struct Env {
 }
 
 impl Env {
-    /// `$HOME` and `$USER` (`root` if unset); `None` without a usable `$HOME`.
+    /// The platform home directory and local user name; `None` without a usable home.
     #[must_use]
     pub fn from_process() -> Option<Self> {
-        let home = std::env::var_os("HOME").map(PathBuf::from)?;
+        let home = crate::platform::home_dir()?;
         home.is_absolute().then(|| Self {
             home,
             user: crate::config::ssh_opts::local_user(),

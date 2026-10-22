@@ -1,3 +1,4 @@
+#![cfg(unix)]
 //! SSH sessions against a real, throwaway OpenSSH `sshd` on 127.0.0.1, plus a tiny
 //! in-process server for password / keyboard-interactive (see `support/fake_server.rs`).
 //!

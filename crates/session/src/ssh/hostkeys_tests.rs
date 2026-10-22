@@ -1,3 +1,4 @@
+#![cfg(unix)]
 #![expect(clippy::unwrap_used, reason = "tests")]
 
 use std::os::unix::fs::PermissionsExt as _;

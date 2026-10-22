@@ -52,12 +52,20 @@ fn main() -> fogu_ui::Result {
 /// `unsafe_code = "forbid"` rules out). Debug builds skip it so debuggers work. Runs first, and
 /// again after the `--software-render` re-exec (exec resets the flag).
 fn harden_process() {
-    if cfg!(debug_assertions) {
-        return;
+    #[cfg(unix)]
+    {
+        if cfg!(debug_assertions) {
+            return;
+        }
+        if let Err(err) = make_undumpable() {
+            // Logging is not up yet; this is a hardening failure the user should see.
+            eprintln!("fogu: could not make the process non-dumpable: {err}");
+        }
     }
-    if let Err(err) = make_undumpable() {
-        // Logging is not up yet; this is a hardening failure the user should see.
-        eprintln!("fogu: could not make the process non-dumpable: {err}");
+    #[cfg(windows)]
+    {
+        // Windows has no `PR_SET_DUMPABLE`; a process mitigation policy is the platform
+        // equivalent and is deliberately deferred to the Windows hardening pass.
     }
 }
 
@@ -66,7 +74,7 @@ fn make_undumpable() -> rustix::io::Result<()> {
     rustix::process::set_dumpable_behavior(rustix::process::DumpableBehavior::NotDumpable)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(unix, not(target_os = "linux")))]
 fn make_undumpable() -> rustix::io::Result<()> {
     use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
     // The soft limit only: child shells inherit it and may raise it again.
@@ -143,16 +151,14 @@ fn init_logging(state_dir: &Result<PathBuf, String>) -> Option<WorkerGuard> {
     guard
 }
 
-/// `$XDG_STATE_HOME/fogu` (default `~/.local/state/fogu`), made 0700 even if it already existed:
-/// the daily log files rotated in later are created with the umask, so the directory keeps them
-/// private.
+/// The platform state directory (see [`fogu_core::platform::state_dir`]), created private on
+/// Unix.
 fn state_dir() -> Result<PathBuf, String> {
-    let state = std::env::var_os("XDG_STATE_HOME")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state")))
-        .ok_or("neither XDG_STATE_HOME nor HOME is set")?;
-    let dir = state.join("fogu");
+    let dir = fogu_core::platform::state_dir().ok_or(if cfg!(windows) {
+        "the local app-data folder (%LOCALAPPDATA%) is not known"
+    } else {
+        "neither XDG_STATE_HOME nor HOME is set"
+    })?;
     fsutil::ensure_private_dir(&dir).map_err(|err| format!("{}: {err}", dir.display()))?;
     Ok(dir)
 }
@@ -161,7 +167,7 @@ fn state_dir() -> Result<PathBuf, String> {
 mod tests {
     /// Core dumps off for Fogu, but only the soft limit: shells started in Fogu inherit it and
     /// can still raise it (`ulimit -c unlimited`), as in any other terminal.
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(all(unix, not(target_os = "linux")))]
     #[test]
     fn undumpable_leaves_the_hard_core_limit_alone() {
         use rustix::process::{Resource, getrlimit};

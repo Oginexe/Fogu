@@ -33,6 +33,24 @@ fn scheme(uri: &str) -> Option<&str> {
     valid.then_some(scheme)
 }
 
+/// The path of a local `file:` URI; `None` for a remote host or a malformed URI.
+fn file_uri_path(uri: &str) -> Option<PathBuf> {
+    let rest = uri.get(5..)?.strip_prefix("//")?;
+    #[cfg(windows)]
+    {
+        // `file:///C:/x` and `file://C:/x` are local; `file://server/share` is not.
+        let rest = rest.strip_prefix('/').unwrap_or(rest);
+        let bytes = rest.as_bytes();
+        let drive =
+            bytes.get(1) == Some(&b':') && bytes.first().is_some_and(u8::is_ascii_alphabetic);
+        drive.then(|| PathBuf::from(rest))
+    }
+    #[cfg(unix)]
+    {
+        rest.starts_with('/').then(|| PathBuf::from(rest))
+    }
+}
+
 /// What `link` may open in a pane that is `local` (else SSH) with working directory `cwd`;
 /// `Err` says why not (shown as a toast / disabled menu item).
 pub fn resolve(link: &Link, local: bool, cwd: Option<&Path>) -> Result<Target, String> {
@@ -45,11 +63,11 @@ pub fn resolve(link: &Link, local: bool, cwd: Option<&Path>) -> Result<Target, S
         (_, Some(s)) if WEB.iter().any(|w| s.eq_ignore_ascii_case(w)) => {
             return Ok(Target::Url(uri.to_owned()));
         }
-        // Only `file:///path`: a host would reach out to a server the output chose.
-        (_, Some(s)) if s.eq_ignore_ascii_case("file") => match uri.get(5..) {
-            Some(rest) if rest.starts_with("///") => PathBuf::from(&rest[2..]),
-            _ => return Err("Only local file:/// links can be opened".to_owned()),
-        },
+        // Only a local `file:///path` (or `file://C:/path` on Windows): a host would reach out
+        // to a server the output chose.
+        (_, Some(s)) if s.eq_ignore_ascii_case("file") => {
+            file_uri_path(uri).ok_or("Only local file:/// links can be opened")?
+        }
         (_, Some(s)) => return Err(format!("Blocked link scheme \u{201c}{s}\u{201d}")),
         (_, None) => return Err("Not a link that can be opened".to_owned()),
     };
@@ -59,7 +77,7 @@ pub fn resolve(link: &Link, local: bool, cwd: Option<&Path>) -> Result<Target, S
     // shortcut: `file://` paths are not percent-decoded; fine for the plain paths tools print.
     let path = match path.strip_prefix("~") {
         Ok(rest) => std::env::home_dir().ok_or("No home directory")?.join(rest),
-        Err(_) if path.is_relative() => cwd
+        Err(_) if path.is_relative() && !path.has_root() => cwd
             .ok_or("The shell has not reported its directory (OSC 7)")?
             .join(path),
         Err(_) => path,

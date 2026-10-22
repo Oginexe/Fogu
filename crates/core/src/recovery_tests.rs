@@ -1,7 +1,5 @@
 #![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
 
-use std::os::unix::fs::PermissionsExt as _;
-
 use super::*;
 use crate::split::Side;
 
@@ -50,7 +48,10 @@ fn sample() -> RecoveryState {
     }
 }
 
+#[cfg(unix)]
 fn mode(path: &Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt as _;
+
     std::fs::metadata(path).unwrap().permissions().mode() & 0o777
 }
 
@@ -62,10 +63,13 @@ fn session_round_trips_with_private_modes() {
     insta::assert_snapshot!(std::fs::read_to_string(dir.join(SESSION_FILE)).unwrap());
     assert_eq!(load(&dir).unwrap(), Some(state));
     save_scrollback(&dir, "a-1", b"{}").unwrap();
-    assert_eq!(mode(&dir), 0o700);
-    assert_eq!(mode(&dir.join(SCROLLBACK_DIR)), 0o700);
-    assert_eq!(mode(&dir.join(SESSION_FILE)), 0o600);
-    assert_eq!(mode(&scrollback_path(&dir, "a-1")), 0o600);
+    #[cfg(unix)]
+    {
+        assert_eq!(mode(&dir), 0o700);
+        assert_eq!(mode(&dir.join(SCROLLBACK_DIR)), 0o700);
+        assert_eq!(mode(&dir.join(SESSION_FILE)), 0o600);
+        assert_eq!(mode(&scrollback_path(&dir, "a-1")), 0o600);
+    }
     clear(&dir).unwrap();
     assert!(load(&dir).unwrap().is_none());
     assert!(!dir.join(SCROLLBACK_DIR).exists());

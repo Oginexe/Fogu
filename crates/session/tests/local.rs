@@ -1,3 +1,4 @@
+#![cfg(unix)]
 //! Headless tests of the local-shell session: real `sh` in a real PTY.
 #![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
