@@ -177,6 +177,10 @@ pub fn default_palette() -> Box<Palette> {
                 }
             }
             232..256 => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "i is in 232..256, so at most 23"
+                )]
                 let v = 8 + 10 * (i - 232) as u8;
                 Rgb { r: v, g: v, b: v }
             }

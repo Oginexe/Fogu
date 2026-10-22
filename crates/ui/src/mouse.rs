@@ -223,6 +223,10 @@ impl MouseState {
         let whole = self.wheel_lines.trunc();
         self.wheel_lines -= whole;
         // Positive (wheel up) scrolls back into history.
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "whole wheel lines; `as` saturates"
+        )]
         let lines = whole as i32;
         if lines != 0 {
             shell.publish(Message::Scroll(Scroll::Delta(lines)));

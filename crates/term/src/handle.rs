@@ -71,6 +71,10 @@ impl fmt::Debug for TermHandle {
 }
 
 // alacritty's reflow never terminates at 1 column once a wide char is on screen
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "alacritty's MIN_COLUMNS is 2"
+)]
 const MIN_COLS: u16 = MIN_COLUMNS as u16;
 
 impl TermHandle {

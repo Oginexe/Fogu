@@ -96,6 +96,7 @@ impl Progress {
         state.2 = now;
         let secs = now.duration_since(self.start).as_secs_f64().max(0.001);
         #[expect(
+            clippy::cast_possible_truncation,
             clippy::cast_precision_loss,
             clippy::cast_sign_loss,
             reason = "a rate estimate"

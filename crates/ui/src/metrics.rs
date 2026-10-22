@@ -110,7 +110,11 @@ impl CellMetrics {
 pub fn grid_size(bounds: iced::Size, metrics: &CellMetrics) -> (u16, u16) {
     let fit = |len: f32, cell: f32| {
         let n = (len / cell).floor().clamp(1.0, f32::from(u16::MAX));
-        #[expect(clippy::cast_sign_loss, reason = "clamped to 1..=u16::MAX above")]
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "clamped to 1..=u16::MAX above"
+        )]
         let n = n as u16;
         n
     };
@@ -153,7 +157,11 @@ pub fn grid_cell(
 pub fn round_to_device(logical: f32, scale: f32) -> (f32, u16) {
     let px = (logical * scale).round().clamp(1.0, f32::from(u16::MAX));
     // `px` is in 1..=u16::MAX after the clamp.
-    #[expect(clippy::cast_sign_loss, reason = "clamped to 1..=u16::MAX above")]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to 1..=u16::MAX above"
+    )]
     let px_u = px as u16;
     (px / scale, px_u)
 }
@@ -180,6 +188,7 @@ pub fn pixel_to_cell(offset: Vector, m: &CellMetrics, cols: usize, rows: usize) 
         }
         let n = (len / cell).floor();
         #[expect(
+            clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
             reason = "non-negative; `as` saturates huge values"
         )]

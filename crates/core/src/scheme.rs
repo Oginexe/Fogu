@@ -22,6 +22,10 @@ pub struct RgbColor {
 
 impl RgbColor {
     /// Builds a colour from a `0xRRGGBB` literal.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "byte extraction from 0xRRGGBB"
+    )]
     pub const fn from_hex(hex: u32) -> Self {
         Self {
             r: (hex >> 16) as u8,

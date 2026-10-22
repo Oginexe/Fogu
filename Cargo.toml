@@ -154,7 +154,6 @@ module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
-cast_possible_truncation = "allow"
 
 [profile.release]
 # "s": -8 MB against 3, feed throughput -1% and first frame unchanged (scripts/metrics.sh)
