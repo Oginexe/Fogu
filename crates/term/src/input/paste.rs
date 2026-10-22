@@ -3,7 +3,7 @@
 //!
 //! Rather than forwarding the clipboard verbatim between `ESC[200~`/`ESC[201~` markers,
 //! [`encode_paste`] strips any embedded end-of-paste marker (and, as a stronger blanket rule, every
-//! raw `ESC` byte) so pasted text can never break out of bracketed paste and masquerade as a
+//! raw `ESC` byte and every C1 control) so pasted text can never break out of bracketed paste and masquerade as a
 //! second, attacker-controlled command line.
 
 /// Options for [`encode_paste`], resolved by the caller (the UI reads `bracketed_requested` off
@@ -43,8 +43,8 @@ pub fn needs_confirmation(text: &str) -> Option<PasteWarning> {
 
 /// Sanitises and (optionally) brackets `text` for the PTY.
 ///
-/// Order: normalise line endings to `\n`; strip the literal end-of-paste marker and every `ESC`
-/// byte unconditionally; when bracketed paste was *not* requested, also strip the other C0
+/// Order: normalise line endings to `\n`; strip the literal end-of-paste marker, every `ESC`
+/// and every C1 control (U+0080..U+009F, whose U+009B is an 8-bit CSI) unconditionally; when bracketed paste was *not* requested, also strip the other C0
 /// controls (bracketed paste tells the app to treat the payload as literal text, so those pass
 /// through only in that mode); apply `newlines_to_spaces` then `trim_whitespace`; turn the
 /// remaining `\n` into `\r` (what a real Enter key sends); wrap in `ESC[200~ … ESC[201~` when
@@ -52,7 +52,7 @@ pub fn needs_confirmation(text: &str) -> Option<PasteWarning> {
 #[must_use]
 pub fn encode_paste(text: &str, opts: PasteOpts) -> Vec<u8> {
     let mut s = normalize_newlines(text).replace(PASTE_END, "");
-    s.retain(|c| c != '\u{1b}' && (opts.bracketed_requested || !is_stripped_c0(c)));
+    s.retain(|c| c != '\u{1b}' && !is_c1(c) && (opts.bracketed_requested || !is_stripped_c0(c)));
     if opts.newlines_to_spaces {
         s = s.replace('\n', " ");
     }
@@ -73,6 +73,12 @@ pub fn encode_paste(text: &str, opts: PasteOpts) -> Vec<u8> {
 /// `\r\n` and lone `\r` both become `\n`.
 fn normalize_newlines(text: &str) -> String {
     text.replace("\r\n", "\n").replace('\r', "\n")
+}
+
+/// A C1 control: never text, and U+009B/U+009D act as CSI/OSC for apps that read 8-bit
+/// controls, so `\u{9b}201~` could end a bracketed paste like `ESC[201~`.
+fn is_c1(c: char) -> bool {
+    ('\u{80}'..='\u{9f}').contains(&c)
 }
 
 /// A C0 control (`0x00..=0x1f`) other than tab/newline/CR.
@@ -191,6 +197,24 @@ mod tests {
                 b"\x1b[200~a\x07b\x1b[201~",
             ),
             ("tab survives either mode", "a\tb", LEGACY, b"a\tb"),
+            (
+                "8-bit CSI (U+009B) can't end the paste either",
+                "ls\u{9b}201~\nrm -rf x",
+                BRACKETED,
+                b"\x1b[200~ls201~\rrm -rf x\x1b[201~",
+            ),
+            (
+                "every C1 (U+0080..U+009F) is stripped, legacy too",
+                "a\u{80}\u{9d}b\u{9f}c",
+                LEGACY,
+                b"abc",
+            ),
+            (
+                "text past C1 is kept",
+                "caf\u{e9}",
+                LEGACY,
+                "caf\u{e9}".as_bytes(),
+            ),
         ];
         for (name, input, opts, want) in cases {
             assert_eq!(encode_paste(input, *opts), *want, "{name}");

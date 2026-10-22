@@ -84,7 +84,7 @@ second and stays out of your way.
 - Terminal emulation by [`alacritty_terminal`](https://github.com/alacritty/alacritty): fast, correct, battle-tested
 - Tabs with rename, colour and backgrounds (colour or image); split panes, resizable with the mouse
 - Drag and drop for tabs, panes and profiles; maximize, equalize and resize from the keyboard
-- Scrollback, mouse selection, copy to PRIMARY and CLIPBOARD, safe multi-line paste
+- Scrollback, mouse selection, copy to PRIMARY and CLIPBOARD, safe multi-line paste (escape and C1 control characters are stripped, so pasted text can never end a bracketed paste)
 - Mouse reporting for TUI apps, with Shift to override
 - Clickable links: OSC 8 hyperlinks plus detected URLs and paths, behind a scheme allow-list
 - Context menus everywhere, configurable right-click behaviour
