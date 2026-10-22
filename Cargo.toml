@@ -40,8 +40,6 @@ regex = "1.13.1"
 # feature, listed explicitly) is the `log` -> tracing bridge for dependencies, so no direct
 # `tracing-log` dependency is needed.
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "tracing-log"] }
-# why: non-blocking daily-rotated log file in $XDG_STATE_HOME/fogu.
-tracing-appender = "0.2.5"
 # why: async runtime for session tasks; multi-thread rt, mpsc, child
 # process wait, timers, `select!`.
 # `net`: TCP for russh's `client::connect`.
@@ -135,9 +133,6 @@ open = "5.4.4"
 # formats we accept (PNG, JPEG, WebP; all pure-Rust decoders).
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 
-# why: command-line flags (`--config-dir`, `--software-render`, `--version`).
-# `derive` keeps the flag definitions declarative; default features (help, usage, errors) only.
-clap = { version = "4.6.7", features = ["derive"] }
 
 [workspace.lints.rust]
 # `deny`, not `forbid`: `fogu_core::winsec` (Windows only) is the one module allowed to opt out.

@@ -144,19 +144,6 @@ pub fn restrict_file(path: &Path) -> io::Result<()> {
     }
 }
 
-/// Sets mode `0600` on every regular file in `dir` whose name starts with `prefix` (log files
-/// written by a library that creates them with the umask's mode).
-pub fn restrict_files(dir: &Path, prefix: &str) -> io::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let name = entry.file_name();
-        if name.to_string_lossy().starts_with(prefix) && entry.file_type()?.is_file() {
-            restrict_file(&entry.path())?;
-        }
-    }
-    Ok(())
-}
-
 /// `.<name>.tmp-<pid>-<n>` in the directory of `path` (unique per process and call).
 fn temp_sibling(path: &Path) -> io::Result<PathBuf> {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -209,11 +196,6 @@ mod tests {
         append_private(&file, b"two\n").unwrap();
         assert_eq!(mode(&file), FILE_MODE);
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "one\ntwo\n");
-        std::fs::write(dir.join("app.log.1"), "x").unwrap();
-        std::fs::write(dir.join("other"), "x").unwrap();
-        restrict_files(&dir, "app.log").unwrap();
-        assert_eq!(mode(&dir.join("app.log.1")), FILE_MODE);
-        assert_ne!(mode(&dir.join("other")), FILE_MODE);
         std::fs::remove_dir_all(&root).unwrap();
     }
     #[cfg(unix)]

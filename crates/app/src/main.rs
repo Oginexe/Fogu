@@ -4,15 +4,12 @@
 mod cli;
 mod crash;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use clap::Parser as _;
 use fogu_core::config::{self, ConfigIssue};
 use fogu_core::fsutil;
 use fogu_ui::{Level, Notification, RunOptions};
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
@@ -22,10 +19,10 @@ use crate::cli::Cli;
 /// Own crates at `info`, dependencies at `warn`; `RUST_LOG` overrides.
 const DEFAULT_FILTER: &str = "warn,fogu=info,fogu_core=info,fogu_term=info,\
                               fogu_session=info,fogu_ui=info";
-/// Log file name prefix (`fogu.log.YYYY-MM-DD`).
-const LOG_PREFIX: &str = "fogu.log";
-/// Daily log files kept.
-const MAX_LOG_FILES: usize = 7;
+/// The log file in the state directory.
+const LOG_FILE: &str = "fogu.log";
+/// Past this size the log is moved to `fogu.log.1` at start-up (one older file kept).
+const LOG_MAX_BYTES: u64 = 4 * 1024 * 1024;
 
 fn main() -> fogu_ui::Result {
     harden_process();
@@ -33,7 +30,7 @@ fn main() -> fogu_ui::Result {
     cli::reexec_for_software_render(&cli);
     let state_dir = state_dir();
     crash::install(state_dir.as_ref().ok().cloned());
-    let _log_guard = init_logging(&state_dir);
+    init_logging(&state_dir);
     let (config, notices) = load_config(&cli);
     let options = RunOptions {
         notices,
@@ -112,34 +109,23 @@ fn load_config(cli: &Cli) -> (fogu_core::Config, Vec<Notification>) {
     (loaded, notices)
 }
 
-/// stderr + non-blocking daily file in `$XDG_STATE_HOME/fogu/`; `log` records are bridged
-/// by tracing-subscriber's `tracing-log` feature. The guard flushes the file on drop.
-fn init_logging(state_dir: &Result<PathBuf, String>) -> Option<WorkerGuard> {
+/// stderr + `fogu.log` in the state directory ([`open_log`]); `log` records are bridged by
+/// tracing-subscriber's `tracing-log` feature. Writes are unbuffered, so nothing is lost on exit.
+fn init_logging(state_dir: &Result<PathBuf, String>) {
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER));
-    let file = state_dir.clone().and_then(|dir| {
-        RollingFileAppender::builder()
-            .rotation(Rotation::DAILY)
-            .filename_prefix(LOG_PREFIX)
-            .max_log_files(MAX_LOG_FILES)
-            .build(&dir)
-            .map_err(|err| format!("{}: {err}", dir.display()))
-    });
-    let (file_layer, guard, file_err) = match file {
-        Ok(appender) => {
-            let (writer, guard) = tracing_appender::non_blocking(appender);
+    let file = state_dir
+        .clone()
+        .and_then(|dir| open_log(&dir).map_err(|err| format!("{}: {err}", dir.display())));
+    let (file_layer, file_err) = match file {
+        Ok(file) => {
             let layer = tracing_subscriber::fmt::layer()
                 .with_ansi(false)
-                .with_writer(writer);
-            (Some(layer), Some(guard), None)
+                .with_writer(std::sync::Mutex::new(file));
+            (Some(layer), None)
         }
-        Err(err) => (None, None, Some(err)),
+        Err(err) => (None, Some(err)),
     };
-    if let Ok(dir) = state_dir
-        && let Err(err) = fsutil::restrict_files(dir, LOG_PREFIX)
-    {
-        eprintln!("fogu: could not restrict log file permissions: {err}");
-    }
     tracing_subscriber::registry()
         .with(filter)
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
@@ -148,7 +134,27 @@ fn init_logging(state_dir: &Result<PathBuf, String>) -> Option<WorkerGuard> {
     if let Some(err) = file_err {
         tracing::warn!("file logging disabled: {err}");
     }
-    guard
+}
+
+/// `fogu.log` in `dir`, private and opened for appending, after moving it to `fogu.log.1` once it
+/// passed [`LOG_MAX_BYTES`].
+fn open_log(dir: &Path) -> std::io::Result<std::fs::File> {
+    let path = dir.join(LOG_FILE);
+    if std::fs::metadata(&path).is_ok_and(|meta| meta.len() > LOG_MAX_BYTES) {
+        std::fs::rename(&path, dir.join(format!("{LOG_FILE}.1")))?;
+    }
+    // shortcut: drops the daily files 0.1.6 and older wrote (`fogu.log.2026-10-22`); delete this
+    // loop once nobody upgrades from those versions.
+    for entry in std::fs::read_dir(dir)?.flatten() {
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(&format!("{LOG_FILE}.20"))
+        {
+            let _gone = std::fs::remove_file(entry.path());
+        }
+    }
+    fsutil::open_private_append(&path)
 }
 
 /// The platform state directory (see [`fogu_core::platform::state_dir`]), created private on
@@ -165,6 +171,38 @@ fn state_dir() -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[expect(clippy::unwrap_used, reason = "tests")]
+    fn the_log_rotates_past_its_limit_and_old_daily_files_go() {
+        use std::io::Write as _;
+
+        let dir = std::env::temp_dir().join(format!("fogu-log-{}", std::process::id()));
+        let _stale = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let big = vec![b'x'; usize::try_from(super::LOG_MAX_BYTES).unwrap() + 1];
+        std::fs::write(dir.join("fogu.log"), &big).unwrap();
+        std::fs::write(dir.join("fogu.log.2026-10-22"), "old").unwrap();
+        std::fs::write(dir.join("crash.log"), "keep").unwrap();
+        super::open_log(&dir).unwrap().write_all(b"new\n").unwrap();
+        assert_eq!(
+            std::fs::read(dir.join("fogu.log.1")).unwrap().len(),
+            big.len()
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("fogu.log")).unwrap(),
+            "new\n"
+        );
+        assert!(!dir.join("fogu.log.2026-10-22").exists());
+        assert!(dir.join("crash.log").exists());
+        // Under the limit: appended to, not rotated.
+        super::open_log(&dir).unwrap().write_all(b"more\n").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join("fogu.log")).unwrap(),
+            "new\nmore\n"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     /// Core dumps off for Fogu, but only the soft limit: shells started in Fogu inherit it and
     /// can still raise it (`ulimit -c unlimited`), as in any other terminal.
     #[cfg(all(unix, not(target_os = "linux")))]
