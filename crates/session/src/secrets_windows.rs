@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use fogu_core::SecretKey;
 use keyring::Entry;
+use secrecy::zeroize::Zeroizing;
 use secrecy::{ExposeSecret as _, SecretString};
 use tokio::runtime::Handle;
 use tokio::sync::OnceCell;
@@ -70,7 +71,9 @@ impl SecretStore {
     pub async fn get(&self, key: &SecretKey) -> Result<Option<SecretString>, SecretError> {
         match self {
             Self::Windows => match call(key, Entry::get_password).await {
-                Ok(text) => Ok(Some(SecretString::from(text))),
+                // Copied once into an exactly sized buffer: `SecretString::from(String)` shrinks
+                // the string, and the reallocation would leave an unzeroed copy behind.
+                Ok(text) => Ok(Some(SecretString::from(Zeroizing::new(text).as_str()))),
                 Err(keyring::Error::NoEntry) => Ok(None),
                 Err(err) => Err(SecretError::new(err)),
             },

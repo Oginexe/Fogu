@@ -112,9 +112,7 @@ impl SecretStore {
                     return Ok(None);
                 };
                 let secret = bounded(item.secret()).await?;
-                let text = std::str::from_utf8(secret.as_bytes())
-                    .map_err(|_| SecretError::new("the stored secret is not text"))?;
-                Ok(Some(SecretString::from(text)))
+                secret_text(secret.as_bytes()).map(Some)
             }
             #[cfg(target_os = "macos")]
             Self::Keychain => keychain::get(key).await,
@@ -197,6 +195,7 @@ mod keychain {
     use std::time::Duration;
 
     use fogu_core::SecretKey;
+    use secrecy::zeroize::Zeroizing;
     use secrecy::{ExposeSecret as _, SecretString};
     use security_framework::item::{ItemClass, ItemSearchOptions, ItemUpdateOptions, update_item};
     use security_framework::passwords::{self, PasswordOptions};
@@ -239,9 +238,7 @@ mod keychain {
         let account = account(key);
         blocking(
             move || match passwords::get_generic_password(SERVICE, &account) {
-                Ok(bytes) => String::from_utf8(bytes)
-                    .map(|text| Some(SecretString::from(text)))
-                    .map_err(|_| SecretError::new("the stored secret is not text")),
+                Ok(bytes) => super::secret_text(&Zeroizing::new(bytes)).map(Some),
                 Err(err) if err.code() == NOT_FOUND => Ok(None),
                 Err(err) => Err(SecretError::new(err)),
             },
@@ -311,6 +308,15 @@ mod keychain {
 #[cfg(any(test, feature = "test-store"))]
 fn id(key: &SecretKey) -> String {
     format!("{:?}", key.attributes())
+}
+
+/// A stored secret's bytes as a [`SecretString`], copied once into a buffer of the exact size:
+/// `SecretString::from(String)` shrinks the string, and the reallocation would leave an unzeroed
+/// copy behind. The caller keeps the source in a zeroizing buffer.
+fn secret_text(bytes: &[u8]) -> Result<SecretString, SecretError> {
+    std::str::from_utf8(bytes)
+        .map(SecretString::from)
+        .map_err(|_| SecretError::new("the stored secret is not text"))
 }
 
 /// Awaits a keyring call under [`CALL_TIMEOUT`].
@@ -490,6 +496,13 @@ mod tests {
         assert!(!format!("{secrets:?}").contains("hunter2"));
         let got = secrets.get(&key("a")).await.unwrap();
         assert!(!format!("{got:?}").contains("hunter2"));
+    }
+
+    #[test]
+    fn stored_bytes_become_text_or_a_plain_error() {
+        assert_eq!(secret_text(b"hunter2").unwrap().expose_secret(), "hunter2");
+        let err = secret_text(&[0xff, 0xfe]).unwrap_err().to_string();
+        assert_eq!(err, "the stored secret is not text");
     }
 
     #[cfg(target_os = "macos")]
