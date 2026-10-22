@@ -1,0 +1,3 @@
+nc %h %p
+-oProxyCommand=x
+me

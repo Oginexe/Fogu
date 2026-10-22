@@ -1,0 +1,3 @@
+nc %h %p
+a;touch /tmp/x
+me

@@ -1,0 +1,3 @@
+ssh -W %h:%p -l %r gw
+box.lan
+me
