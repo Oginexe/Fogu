@@ -25,7 +25,10 @@ its own licence. The Rust crates compiled into the binary, with their licence te
 ## Interface font
 
 - **Inter 4.1** Regular and Medium (`assets/fonts/Inter-Regular.ttf`, `assets/fonts/Inter-Medium.ttf`,
-  embedded in the binary): <https://github.com/rsms/inter>, SIL Open Font License 1.1,
+  embedded in the binary), subset with `pyftsubset` to Latin, Greek, Cyrillic and symbols
+  (`--unicodes=U+0000-024F,U+0300-036F,U+0370-03FF,U+0400-04FF,U+1E00-1EFF,U+2000-206F,U+20A0-20CF,U+2100-215F,U+2190-21FF,U+2200-22FF,U+2500-257F,U+25A0-25FF,U+2600-26FF,U+2700-27BF,U+FFFD`
+  `--layout-features=kern,liga,calt,ccmp,locl,mark,mkmk`): <https://github.com/rsms/inter>,
+  SIL Open Font License 1.1,
   Copyright (c) 2016 The Inter Project Authors. Full licence: `assets/fonts/Inter-LICENSE.txt`.
 
 ## Icons
