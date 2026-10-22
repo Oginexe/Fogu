@@ -172,19 +172,23 @@ xattr -dr com.apple.quarantine Fogu-macos-*
 
 ### Windows (alpha)
 
-No prebuilt download yet: build it with [rustup](https://rustup.rs) (its installer sets up the
-Visual Studio C++ Build Tools Rust needs). In PowerShell:
+Windows 10 or 11, x86_64. In PowerShell:
 
 ```powershell
-git clone https://github.com/Revdep/Fogu.git
-cd Fogu; cargo install --path crates/app --locked
+curl.exe -fsSLo Fogu.zip https://github.com/Revdep/Fogu/releases/latest/download/Fogu-windows-x86_64.zip
+Expand-Archive Fogu.zip -DestinationPath $env:LOCALAPPDATA\Programs
+& "$env:LOCALAPPDATA\Programs\Fogu-windows-x86_64\fogu.exe"
 ```
 
-Then run `fogu`. To remove it: `cargo uninstall fogu`.
+To remove it, delete that folder.
 
 <details>
 <summary>Good to know on Windows</summary>
 
+- **SmartScreen:** Fogu is not code-signed, so the first launch may show "Windows protected your
+  PC": choose *More info* → *Run anyway*.
+- **From source:** with [rustup](https://rustup.rs), `cargo install --path crates/app --locked`
+  in a clone of this repository.
 - **Shell:** new tabs open `pwsh`, then Windows PowerShell, then `cmd`, whichever is found first.
 - **Config** lives in `%APPDATA%\fogu\config.toml`; hosts are read from `%USERPROFILE%\.ssh\config`.
 - **Passwords** are stored in the Windows Credential Manager.

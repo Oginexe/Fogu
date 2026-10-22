@@ -18,7 +18,14 @@ jobs:
             name: macos-aarch64
           - os: macos-15-intel
             name: macos-x86_64
+          # static CRT: the .exe runs without the Visual C++ redistributable
+          - os: windows-2025
+            name: windows-x86_64
+            rustflags: -C target-feature=+crt-static
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       - name: tag matches the workspace version
@@ -28,8 +35,11 @@ jobs:
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libudev-dev libxkbcommon-dev libwayland-dev
       - run: cargo build --release --locked -p fogu
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
       # the layout scripts/install.sh expects, so the archive installs with the same script
       - name: package
+        if: runner.os != 'Windows'
         run: |
           d="Fogu-${{ matrix.name }}"
           mkdir -p "$d/target/release" "$d/scripts" "$d/assets/icons"
@@ -39,6 +49,13 @@ jobs:
           cp assets/icons/fogu-*.png "$d/assets/icons/"
           cp LICENSE README.md THIRD_PARTY_LICENSES "$d/"
           tar czf "$d.tar.gz" "$d"
+      - name: package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          d="Fogu-${{ matrix.name }}"
+          mkdir "$d"
+          cp target/release/fogu.exe LICENSE README.md THIRD_PARTY_LICENSES "$d/"
+          7z a "$d.zip" "$d"
       # the binary links only libc/libm/libgcc_s, so the AppDir needs nothing but the binary
       - name: appimage
         if: runner.os == 'Linux'
@@ -57,6 +74,7 @@ jobs:
           name: Fogu-${{ matrix.name }}
           path: |
             Fogu-${{ matrix.name }}.tar.gz
+            Fogu-${{ matrix.name }}.zip
             Fogu-x86_64.AppImage
           if-no-files-found: ignore
   release:
@@ -68,7 +86,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
-      - run: sha256sum Fogu-*.tar.gz Fogu-*.AppImage > SHA256SUMS
-      - run: gh release create "$GITHUB_REF_NAME" Fogu-*.tar.gz Fogu-*.AppImage SHA256SUMS --repo "$GITHUB_REPOSITORY" --generate-notes
+      - run: sha256sum Fogu-*.tar.gz Fogu-*.zip Fogu-*.AppImage > SHA256SUMS
+      - run: gh release create "$GITHUB_REF_NAME" Fogu-*.tar.gz Fogu-*.zip Fogu-*.AppImage SHA256SUMS --repo "$GITHUB_REPOSITORY" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
