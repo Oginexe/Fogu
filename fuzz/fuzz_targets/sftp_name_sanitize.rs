@@ -29,8 +29,16 @@ fuzz_target!(|data: &[u8]| {
         assert!(validate_name(name).is_ok());
         assert!(!name.contains(['\\', ':', '<', '>', '"', '|', '?', '*']));
         assert!(!name.ends_with(['.', ' ']));
-        let stem = name.split('.').next().unwrap_or_default().trim_end().to_ascii_lowercase();
-        assert!(!matches!(stem.as_str(), "con" | "prn" | "aux" | "nul" | "conin$" | "conout$"));
+        let stem = name
+            .split('.')
+            .next()
+            .unwrap_or_default()
+            .trim_end_matches(' ')
+            .to_ascii_lowercase();
+        assert!(!matches!(
+            stem.as_str(),
+            "con" | "prn" | "aux" | "nul" | "conin$" | "conout$"
+        ));
     }
     let shown = display_name(&text);
     assert!(!shown.chars().any(char::is_control));
