@@ -121,7 +121,11 @@ fn prune_drops_closed_panes_then_the_oldest_beyond_the_cap() {
 #[test]
 fn keys_are_plain_names() {
     assert!(valid_key("18f2a-1b2c-3"));
-    for bad in ["", "A", "a/b", "..", "a b", &"x".repeat(65)] {
+    let traversal = ["../x", "..\\x", "/etc/x", "c:x", "x.json"];
+    for bad in ["", "A", "a/b", "..", "a b", &"x".repeat(65)]
+        .into_iter()
+        .chain(traversal)
+    {
         assert!(!valid_key(bad), "{bad:?}");
     }
 }
