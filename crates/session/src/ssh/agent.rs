@@ -184,7 +184,8 @@ fn start_private() -> Option<PathBuf> {
         return None;
     }
     let socket = dir.join(format!("agent-{}.sock", std::process::id()));
-    let _ = std::fs::remove_file(&socket);
+    // A stale socket a crashed run with this pid left; usually there is none.
+    let _stale = std::fs::remove_file(&socket);
     let pid = std::process::id().to_string();
     let tail_pid = format!("--pid={pid}");
     let keep_alive: &[&str] = if cfg!(target_os = "macos") {

@@ -172,7 +172,8 @@ pub(crate) async fn run_local(
         }
         Ok(End::Close) => close(local).await,
         Err(Gone) => {
-            close(local).await.ok();
+            // The UI is gone: there is nobody to report the exit status to.
+            let _status = close(local).await;
             return;
         }
     };
