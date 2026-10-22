@@ -1,6 +1,5 @@
 //! Config file I/O: XDG path, atomic in-place writes, load with graceful fallback.
 
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use super::Config;
@@ -176,26 +175,23 @@ fn background_value(background: &Background) -> toml_edit::Value {
     toml_edit::Value::InlineTable(outer)
 }
 
+/// Replaces `dir/config.toml` without a moment where it is missing: the old content is first
+/// written to `config.toml.bak`, then the new one over the file a symlinked `config.toml` points
+/// at (so a dotfiles link stays a link). Both through [`crate::fsutil::write_private_atomic`].
 pub(super) fn write_atomic(dir: &Path, contents: &[u8]) -> Result<(), ConfigError> {
     let dest = dir.join(FILE_NAME);
-    let tmp = dir.join(format!("{FILE_NAME}.tmp"));
-    write_new_file(&tmp, contents)?;
-    let bak = dir.join(format!("{FILE_NAME}.bak"));
-    match std::fs::rename(&dest, &bak) {
-        // The user's original may have been created 0644; the backup is private too.
-        Ok(()) => crate::fsutil::restrict_file(&bak).map_err(|err| ConfigError::io(&bak, err))?,
+    match std::fs::read(&dest) {
+        Ok(old) => {
+            let bak = dir.join(format!("{FILE_NAME}.bak"));
+            crate::fsutil::write_private_atomic(&bak, &old)
+                .map_err(|err| ConfigError::io(&bak, err))?;
+        }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => return Err(ConfigError::io(&dest, err)),
     }
-    std::fs::rename(&tmp, &dest).map_err(|err| ConfigError::io(&tmp, err))
-}
-
-fn write_new_file(path: &Path, contents: &[u8]) -> Result<(), ConfigError> {
-    let mut file =
-        crate::fsutil::open_private_truncate(path).map_err(|err| ConfigError::io(path, err))?;
-    file.write_all(contents)
-        .map_err(|err| ConfigError::io(path, err))?;
-    file.sync_all().map_err(|err| ConfigError::io(path, err))
+    let target = dest.canonicalize().unwrap_or(dest);
+    crate::fsutil::write_private_atomic(&target, contents)
+        .map_err(|err| ConfigError::io(&target, err))
 }
 
 #[cfg(test)]
@@ -379,6 +375,46 @@ background = { color = \"#112233\" }   # keep me
         let err = set_profile_background(tmp.path(), "work", Some(&bg)).unwrap_err();
         assert!(matches!(err, ConfigError::Io { .. }), "{err}");
         assert!(!path.exists());
+    }
+
+    /// A crash leaves a stale temp file behind; a later save must neither write through it (a
+    /// symlink planted under that name) nor fail on it.
+    #[cfg(unix)]
+    #[test]
+    fn save_never_writes_through_a_planted_temp_file() {
+        let tmp = tempdir();
+        let path = fixture(&tmp);
+        let victim = tmp.path().join("victim");
+        std::fs::write(&victim, "keep").unwrap();
+        std::os::unix::fs::symlink(&victim, tmp.path().join(format!("{FILE_NAME}.tmp"))).unwrap();
+        set_profile_background(tmp.path(), "play", None).unwrap();
+        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep");
+        assert_ne!(std::fs::read_to_string(&path).unwrap(), FIXTURE);
+    }
+
+    /// A `config.toml` symlinked from a dotfiles repo stays a symlink; the repo file is updated.
+    #[cfg(unix)]
+    #[test]
+    fn save_keeps_a_symlinked_config_in_place() {
+        let tmp = tempdir();
+        let dotfiles = tmp.path().join("dotfiles");
+        std::fs::create_dir(&dotfiles).unwrap();
+        let real = dotfiles.join(FILE_NAME);
+        std::fs::write(&real, FIXTURE).unwrap();
+        let dir = tmp.path().join("conf");
+        std::fs::create_dir(&dir).unwrap();
+        let link = dir.join(FILE_NAME);
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        set_profile_background(&dir, "play", None).unwrap();
+        assert!(
+            std::fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(!std::fs::read_to_string(&real).unwrap().contains("#112233"));
+        let bak = dir.join(format!("{FILE_NAME}.bak"));
+        assert_eq!(std::fs::read_to_string(bak).unwrap(), FIXTURE);
     }
 
     /// A tiny unique-per-test temp dir under the system temp dir, removed on drop.
