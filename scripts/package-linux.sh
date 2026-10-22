@@ -3,7 +3,8 @@
 #   dist/Fogu-<version>-linux-x86_64.tar.gz  (binary, icons, .desktop entry, install.sh)
 # The build runs in the manylinux_2_28 image (AlmaLinux 8, glibc 2.28) through Docker, so the
 # binary starts on Debian 10+, Ubuntu 20.04+, RHEL/Alma/Rocky 8+, Fedora, Arch and newer; the
-# release built on this machine needs the host's much newer glibc. Needs: docker. Downloads stay in the `fogu-cargo` volume between runs.
+# release built on this machine needs the host's much newer glibc. Needs: docker, cargo-about
+# (`cargo install --locked --features cli cargo-about@0.9.2`). Downloads stay in the `fogu-cargo` volume between runs.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -34,6 +35,8 @@ mkdir -p "$stage/$name/icons"
 install -m755 "$bin" "$stage/$name/fogu"
 cp assets/icons/fogu-{48,128,256,512}.png "$stage/$name/icons/"
 cp assets/fogu.desktop "$stage/$name/"
+cp LICENSE THIRD_PARTY_LICENSES assets/fonts/*-LICENSE.txt "$stage/$name/"
+cargo about generate --locked -m crates/app/Cargo.toml about.hbs -o "$stage/$name/THIRD_PARTY_CRATES"
 cat > "$stage/$name/install.sh" <<'EOF'
 #!/usr/bin/env bash
 # Installs Fogu for the current user (no root): ~/.local/bin, menu entry, icons.

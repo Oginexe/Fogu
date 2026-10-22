@@ -37,31 +37,40 @@ jobs:
       - run: cargo build --release --locked -p fogu
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
+      # the licence texts of every crate in the binary (MIT/Apache/BSD require shipping them)
+      - name: third-party crate licences
+        run: |
+          cargo install --locked --features cli cargo-about@0.9.2
+          cargo about generate --locked -m crates/app/Cargo.toml about.hbs -o THIRD_PARTY_CRATES
       # the layout scripts/install.sh expects, so the archive installs with the same script
       - name: package
         if: runner.os != 'Windows'
         run: |
           d="Fogu-${{ matrix.name }}"
-          mkdir -p "$d/target/release" "$d/scripts" "$d/assets/icons"
+          mkdir -p "$d/target/release" "$d/scripts" "$d/assets/icons" "$d/assets/fonts"
           cp target/release/fogu "$d/target/release/"
           cp scripts/install.sh "$d/scripts/"
           cp assets/fogu.png assets/fogu.desktop "$d/assets/"
           cp assets/icons/fogu-*.png "$d/assets/icons/"
-          cp LICENSE README.md THIRD_PARTY_LICENSES "$d/"
+          cp LICENSE README.md THIRD_PARTY_LICENSES THIRD_PARTY_CRATES "$d/"
+          cp assets/fonts/*-LICENSE.txt "$d/assets/fonts/"
           tar czf "$d.tar.gz" "$d"
       - name: package (Windows)
         if: runner.os == 'Windows'
         run: |
           d="Fogu-${{ matrix.name }}"
-          mkdir "$d"
-          cp target/release/fogu.exe LICENSE README.md THIRD_PARTY_LICENSES "$d/"
+          mkdir -p "$d/assets/fonts"
+          cp target/release/fogu.exe LICENSE README.md THIRD_PARTY_LICENSES THIRD_PARTY_CRATES "$d/"
+          cp assets/fonts/*-LICENSE.txt "$d/assets/fonts/"
           7z a "$d.zip" "$d"
       # the binary links only libc/libm/libgcc_s, so the AppDir needs nothing but the binary
       - name: appimage
         if: runner.os == 'Linux'
         run: |
-          mkdir -p Fogu.AppDir/usr/bin
+          mkdir -p Fogu.AppDir/usr/bin Fogu.AppDir/usr/share/doc/fogu
           cp target/release/fogu Fogu.AppDir/usr/bin/
+          cp LICENSE THIRD_PARTY_LICENSES THIRD_PARTY_CRATES assets/fonts/*-LICENSE.txt \
+            Fogu.AppDir/usr/share/doc/fogu/
           cp assets/fogu.desktop Fogu.AppDir/
           cp assets/icons/fogu-256.png Fogu.AppDir/fogu.png
           ln -s usr/bin/fogu Fogu.AppDir/AppRun
