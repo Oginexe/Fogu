@@ -20,7 +20,7 @@ pub struct Cli {
     /// Render on the CPU (tiny-skia) instead of the GPU; for broken drivers and VMs.
     #[arg(long)]
     pub software_render: bool,
-    /// Exit right after the first presented frame (used by the benchmarks).
+    /// Exit right after the first presented frame (timed by `scripts/metrics.sh`).
     #[arg(long, hide = true)]
     pub exit_after_first_frame: bool,
     /// Start with one new tab: don't restore the saved tabs and don't save this session.

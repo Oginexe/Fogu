@@ -37,6 +37,9 @@ jobs:
       - run: cargo build --release --locked -p fogu
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
+      # size gate: lower the limit whenever a cut lands (scripts/metrics.sh measures it)
+      - if: runner.os == 'Linux'
+        run: test "$(stat -c %s target/release/fogu)" -le 30000000
       # the licence texts of every crate in the binary (MIT/Apache/BSD require shipping them)
       - name: third-party crate licences
         run: |
