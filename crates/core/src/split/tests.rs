@@ -1,4 +1,4 @@
-#![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
+#![expect(clippy::unwrap_used, reason = "tests")]
 
 use super::*;
 

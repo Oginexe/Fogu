@@ -214,7 +214,7 @@ fn jump_cycle(config: &Config, start: &Profile) -> Option<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
+    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
     use crate::config::ssh_opts::SshOpts;

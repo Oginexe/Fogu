@@ -1,7 +1,7 @@
 //! Reducer tests for the file operations: rename / new folder / delete / permissions,
 //! follow-the-terminal, the conflict choices, and the App wiring of the entry menu, remote cwd and
 //! "cd terminal here".
-#![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
+#![expect(clippy::unwrap_used, reason = "tests")]
 
 use std::time::Instant;
 

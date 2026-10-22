@@ -1,9 +1,4 @@
-#![expect(
-    clippy::unwrap_used,
-    clippy::indexing_slicing,
-    clippy::panic,
-    reason = "tests"
-)]
+#![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
 use std::path::PathBuf;
 

@@ -389,7 +389,7 @@ async fn log_stderr(mut stderr: tokio::process::ChildStderr, last: Arc<Mutex<Str
         if n == 0 {
             break;
         }
-        for &byte in buf.get(..n).unwrap_or_default() {
+        for &byte in &buf[..n] {
             if byte == b'\n' {
                 finish(&mut line);
             } else if line.len() < STDERR_LINE_MAX {

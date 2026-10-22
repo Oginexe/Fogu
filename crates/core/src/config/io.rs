@@ -196,12 +196,7 @@ pub(super) fn write_atomic(dir: &Path, contents: &[u8]) -> Result<(), ConfigErro
 
 #[cfg(test)]
 mod tests {
-    #![expect(
-        clippy::unwrap_used,
-        clippy::expect_used,
-        clippy::indexing_slicing,
-        reason = "tests"
-    )]
+    #![expect(clippy::unwrap_used, clippy::expect_used, reason = "tests")]
 
     use super::*;
 

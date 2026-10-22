@@ -182,7 +182,7 @@ async fn run_loop(
         // Queue at most one write at a time; input accumulates in `pump.pending` meanwhile.
         if !write_in_flight && !pump.pending.is_empty() {
             let chunk = pump.pending.len().min(WRITE_CHUNK);
-            let bytes = pump.pending.get(..chunk).unwrap_or_default().to_vec();
+            let bytes = pump.pending[..chunk].to_vec();
             if local.write_tx.send(bytes).await.is_err() {
                 pump.write_failed();
             } else {
@@ -326,7 +326,7 @@ fn read_loop(mut reader: Box<dyn io::Read + Send>, tx: Sender<io::Result<Vec<u8>
                 return;
             }
             Ok(n) => {
-                let chunk = buf.get(..n).unwrap_or_default().to_vec();
+                let chunk = buf[..n].to_vec();
                 if tx.blocking_send(Ok(chunk)).is_err() {
                     return;
                 }

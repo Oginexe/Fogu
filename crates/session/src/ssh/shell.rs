@@ -97,7 +97,7 @@ async fn shell(
                 Some(SessionInput::Close) | None => break Err(Stop::Closed),
             },
             () = shared.gone.cancelled() => break Ok(status),
-            written = writer.write(pump.pending.get(..chunk).unwrap_or_default()), if chunk > 0 => {
+            written = writer.write(&pump.pending[..chunk]), if chunk > 0 => {
                 match written {
                     Ok(n) => pump.written(n),
                     Err(err) => {

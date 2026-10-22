@@ -148,7 +148,6 @@ panic = "warn"
 todo = "warn"
 dbg_macro = "warn"
 print_stdout = "warn"
-indexing_slicing = "warn"
 undocumented_unsafe_blocks = "deny"
 # pedantic noise we accept:
 module_name_repetitions = "allow"
