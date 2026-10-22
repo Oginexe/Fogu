@@ -239,7 +239,8 @@ impl Pane {
     /// Clears `dirty` *before* snapshotting, so output arriving meanwhile sends a new wakeup.
     pub fn refresh(&mut self) {
         self.dirty.store(false, Ordering::SeqCst);
-        self.snapshot = self.term.snapshot();
+        let cells = std::mem::take(&mut self.snapshot.cells);
+        self.snapshot = self.term.snapshot_reusing(cells);
     }
 
     /// Sends a control message without blocking the UI. `false` when the session is gone

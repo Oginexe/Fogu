@@ -68,28 +68,27 @@ pub struct RenderSnapshot {
 }
 
 impl RenderSnapshot {
-    /// Copies the visible rows of `term`. Call with the lock held, then drop the lock.
-    pub(crate) fn capture<T: EventListener>(term: &Term<T>) -> Self {
+    /// Copies the visible rows of `term` into `cells` (cleared first, its allocation reused).
+    /// Call with the lock held, then drop the lock.
+    pub(crate) fn capture<T: EventListener>(term: &Term<T>, mut cells: Vec<Cell>) -> Self {
         let content = term.renderable_content();
         let cols = term.columns();
         let rows = term.screen_lines();
         let display_offset = content.display_offset;
 
-        let cells = content
-            .display_iter
-            .map(|indexed| {
-                let cell = indexed.cell;
-                Cell {
-                    ch: cell.c,
-                    zerowidth: cell.zerowidth().map(Box::from),
-                    fg: cell.fg,
-                    bg: cell.bg,
-                    underline_color: cell.underline_color(),
-                    flags: cell.flags,
-                    hyperlink: cell.hyperlink(),
-                }
-            })
-            .collect();
+        cells.clear();
+        cells.extend(content.display_iter.map(|indexed| {
+            let cell = indexed.cell;
+            Cell {
+                ch: cell.c,
+                zerowidth: cell.zerowidth().map(Box::from),
+                fg: cell.fg,
+                bg: cell.bg,
+                underline_color: cell.underline_color(),
+                flags: cell.flags,
+                hyperlink: cell.hyperlink(),
+            }
+        }));
 
         let point = content.cursor.point;
         // Grid line 0 is the top of the live screen; the viewport starts `display_offset` above.
