@@ -1,6 +1,7 @@
 //! Tab recovery state: `session.toml` (tabs, layouts, which profile each pane runs) and one
-//! `scrollback/<key>.json` per pane in `$XDG_STATE_HOME/fogu/`, directory `0700`, files `0600`
-//! written atomically through [`fsutil`](crate::fsutil).
+//! `scrollback/<key>.json` (local) or encrypted `<key>.enc` (SSH) per pane in
+//! `$XDG_STATE_HOME/fogu/`, directory `0700`, files `0600`, written atomically through
+//! [`fsutil`](crate::fsutil).
 
 use std::collections::BTreeSet;
 use std::io;
@@ -27,8 +28,9 @@ pub const MAX_SESSION_BYTES: u64 = 1024 * 1024;
 /// Hard cap on all scrollback files together; the oldest go first.
 pub const MAX_TOTAL_SCROLLBACK: u64 = 32 * 1024 * 1024;
 /// The privacy note shown before clearing and above `[recovery]`.
-pub const PRIVACY_NOTE: &str = "Saved scrollback may contain passwords or other secrets shown in \
-                                the terminal. It is stored unencrypted, readable only by your user.";
+pub const PRIVACY_NOTE: &str = "Saved local scrollback may contain passwords or other secrets \
+                                shown in the terminal. It is stored unencrypted, readable only by \
+                                your user. Saved SSH scrollback is encrypted.";
 
 /// Everything needed to rebuild the window's tabs.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -104,6 +106,12 @@ pub fn scrollback_path(dir: &Path, key: &str) -> PathBuf {
     dir.join(SCROLLBACK_DIR).join(format!("{key}.json"))
 }
 
+/// `scrollback/<key>.enc` under `dir`.
+#[must_use]
+pub fn encrypted_scrollback_path(dir: &Path, key: &str) -> PathBuf {
+    dir.join(SCROLLBACK_DIR).join(format!("{key}.enc"))
+}
+
 /// Reads `dir/session.toml`: `Ok(None)` when there is none or it was written by a newer build
 /// (left alone), `Err` when it is unreadable or invalid (the caller keeps it as
 /// [`CORRUPT_FILE`]).
@@ -158,9 +166,24 @@ pub fn save_scrollback(dir: &Path, key: &str, json: &[u8]) -> io::Result<()> {
     fsutil::write_private_atomic(&scrollback_path(dir, key), json)
 }
 
-/// Deletes scrollback files whose key is not in `keep` (closed panes, opted-out profiles), then
-/// the oldest files until all of them fit in `max_total` bytes.
-pub fn prune_scrollback(dir: &Path, keep: &BTreeSet<String>, max_total: u64) -> io::Result<()> {
+/// Writes one pane's encrypted scrollback (`scrollback/` created `0700`, file `0600`, atomic).
+pub fn save_encrypted_scrollback(dir: &Path, key: &str, sealed: &[u8]) -> io::Result<()> {
+    if !valid_key(key) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "bad pane key"));
+    }
+    fsutil::create_private_dir(&dir.join(SCROLLBACK_DIR))?;
+    fsutil::write_private_atomic(&encrypted_scrollback_path(dir, key), sealed)
+}
+
+/// Deletes scrollback files whose key and kind are not in the matching keep set, then the oldest
+/// files until all of them fit in `max_total` bytes. `keep_encrypted = None` leaves every encrypted
+/// file alone while its keyring key is unavailable.
+pub fn prune_scrollback(
+    dir: &Path,
+    keep_plain: &BTreeSet<String>,
+    keep_encrypted: Option<&BTreeSet<String>>,
+    max_total: u64,
+) -> io::Result<()> {
     let sb = dir.join(SCROLLBACK_DIR);
     let entries = match std::fs::read_dir(&sb) {
         Ok(entries) => entries,
@@ -179,8 +202,17 @@ pub fn prune_scrollback(dir: &Path, keep: &BTreeSet<String>, max_total: u64) -> 
         if !meta.is_file() {
             continue;
         }
-        if !keep.contains(&key) || path.extension().is_none_or(|e| e != "json") {
+        let extension = path.extension().and_then(|e| e.to_str());
+        let keep = match extension {
+            Some("json") => keep_plain.contains(&key),
+            Some("enc") => keep_encrypted.is_none_or(|keys| keys.contains(&key)),
+            _ => false,
+        };
+        if !keep {
             let _gone = std::fs::remove_file(&path);
+            continue;
+        }
+        if extension == Some("enc") && keep_encrypted.is_none() {
             continue;
         }
         let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
@@ -194,6 +226,24 @@ pub fn prune_scrollback(dir: &Path, keep: &BTreeSet<String>, max_total: u64) -> 
         }
         std::fs::remove_file(&path)?;
         total = total.saturating_sub(len);
+    }
+    Ok(())
+}
+
+/// Deletes every encrypted scrollback file, leaving local scrollback and the layout alone.
+pub fn clear_encrypted_scrollback(dir: &Path) -> io::Result<()> {
+    let entries = match std::fs::read_dir(dir.join(SCROLLBACK_DIR)) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(err),
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|extension| extension == "enc")
+            && entry.file_type().is_ok_and(|kind| kind.is_file())
+        {
+            std::fs::remove_file(path)?;
+        }
     }
     Ok(())
 }

@@ -344,6 +344,14 @@ impl App {
         {
             return Task::none();
         }
+        if self
+            .tabs
+            .iter_mut()
+            .filter_map(|tab| tab.settings.as_deref_mut())
+            .any(|settings| std::mem::take(&mut settings.pending_ssh_recovery))
+        {
+            return Task::none();
+        }
         if let Some(pane) = self.active_pane().filter(|p| p.prompt.is_some()) {
             let id = pane.id;
             self.answer(id, PromptReply::Reject);

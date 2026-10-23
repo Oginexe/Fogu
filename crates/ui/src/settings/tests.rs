@@ -163,6 +163,66 @@ fn nav_switches_pages() {
 }
 
 #[test]
+fn ssh_recovery_toggle_asks_before_it_changes_the_setting() {
+    let t = tmp();
+    let mut app = opened(&t);
+    field(
+        &mut app,
+        FieldId::RecoverySshScrollback,
+        FieldValue::Bool(true),
+    );
+    assert!(!app.config.recovery.restore_ssh_scrollback);
+    let modal = app.ssh_recovery_modal().unwrap();
+    assert_eq!(modal.title, "Keep SSH history after restart?");
+    assert_eq!(modal.buttons[0].label, "Turn on");
+    assert_eq!(modal.buttons[1].label, "Cancel");
+    let _ = app.update(Message::Settings(SettingsMsg::ConfirmSshRecovery(false)));
+    assert!(app.ssh_recovery_modal().is_none());
+    assert!(!file(&t).contains("restore_ssh_scrollback"));
+}
+
+#[test]
+fn a_keyring_failure_leaves_ssh_recovery_off_and_shows_one_warning() {
+    let t = tmp();
+    let mut app = opened(&t);
+    let _ = app.update(Message::Settings(SettingsMsg::SshRecoveryKeyLoaded {
+        enable: true,
+        result: Err("locked".to_owned()),
+    }));
+    assert!(!app.config.recovery.restore_ssh_scrollback);
+    let notes: Vec<_> = app
+        .toasts
+        .iter()
+        .filter(|note| note.title == "SSH history not turned on")
+        .collect();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].detail, "The system keyring is locked or missing.");
+}
+
+#[cfg(feature = "ssh")]
+#[test]
+fn turning_ssh_recovery_off_removes_encrypted_files() {
+    let t = tmp();
+    let mut app = opened(&t);
+    let state = t.0.join("state");
+    app.state_dir = Some(state.clone());
+    fogu_core::recovery::save_encrypted_scrollback(&state, "pane", b"sealed").unwrap();
+    let key = fogu_session::new_recovery_key().unwrap();
+    let _ = app.update(Message::Settings(SettingsMsg::SshRecoveryKeyLoaded {
+        enable: true,
+        result: Ok(key),
+    }));
+    assert!(app.config.recovery.restore_ssh_scrollback);
+    field(
+        &mut app,
+        FieldId::RecoverySshScrollback,
+        FieldValue::Bool(false),
+    );
+    assert!(!app.config.recovery.restore_ssh_scrollback);
+    assert!(!fogu_core::recovery::encrypted_scrollback_path(&state, "pane").exists());
+}
+
+#[test]
 fn changed_config_file_is_applied_to_the_running_app() {
     let t = tmp();
     let mut app = opened(&t);

@@ -6,6 +6,8 @@
 - Windows support (alpha): ConPTY shells, Credential Manager, the OpenSSH agent pipe and Windows
   SFTP paths, by [@Federicokalik](https://github.com/Federicokalik) in
   [#3](https://github.com/Revdep/Fogu/pull/3). Thank you!
+- SSH tabs can keep their history after a restart (off by default, Settings → Tab recovery). It is
+  saved only encrypted, with a key kept in your system's password vault.
 
 ### Security
 - Windows: network (UNC) paths in links and in the working directory a program reports are never

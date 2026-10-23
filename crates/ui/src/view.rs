@@ -250,6 +250,7 @@ impl App {
             .or_else(|| self.close_modal())
             .or_else(|| self.delete_modal())
             .or_else(|| self.clear_sessions_modal())
+            .or_else(|| self.ssh_recovery_modal())
             .or_else(|| self.discard_modal());
         let base = overlay(base, modal);
         let dialog = self

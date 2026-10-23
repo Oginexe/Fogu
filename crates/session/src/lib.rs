@@ -6,6 +6,8 @@ mod env;
 mod local;
 mod pipeline;
 mod prompt;
+#[cfg(feature = "ssh")]
+mod recovery;
 #[cfg(all(feature = "ssh", unix))]
 mod secrets;
 #[cfg(all(feature = "ssh", windows))]
@@ -34,6 +36,10 @@ pub use env::build_env;
 pub use prompt::{
     KbdPrompt, PROMPT_INSTRUCTIONS_MAX_CHARS, PROMPT_MAX_COUNT, PROMPT_TEXT_MAX_CHARS, PromptId,
     PromptKind, PromptReply, Remember, sanitize_remote,
+};
+#[cfg(feature = "ssh")]
+pub use recovery::{
+    RecoveryCryptoError, new_recovery_key, open_recovery, seal_recovery, validate_recovery_key,
 };
 #[cfg(feature = "ssh")]
 pub use secrets::{SecretError, SecretStore, Secrets};

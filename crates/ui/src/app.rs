@@ -97,6 +97,8 @@ pub struct App {
     pub(crate) pending_close: Option<CloseTarget>,
     /// `--config-dir` (SSH `known_hosts` location); `None` = the default.
     pub(crate) config_dir: Option<std::path::PathBuf>,
+    /// State directory used by Recent and tab recovery; retained for settings cleanup.
+    pub(crate) state_dir: Option<std::path::PathBuf>,
     /// Last observed `(modified, length)` of `config.toml`; refreshed after Fogu writes it too.
     pub(crate) config_file_stamp: Option<(std::time::SystemTime, u64)>,
     /// `config.toml` is watched for edits (set by [`Self::remember_config_file`] at boot).
@@ -204,6 +206,7 @@ impl App {
             secret_dialog: None,
             search: None,
             config_dir: None,
+            state_dir: None,
             config_file_stamp: None,
             config_watched: false,
             modifiers: keyboard::Modifiers::default(),
@@ -251,10 +254,12 @@ impl App {
         let mut app = Self::new(runtime, config, resolved);
         app.exit_after_first_frame = options.exit_after_first_frame;
         app.config_dir = options.config_dir;
+        app.state_dir.clone_from(&options.state_dir);
         app.remember_config_file();
         let mut tasks = vec![app.refresh_ssh_hosts()];
         tasks.push(app.after(CONFIG_POLL, Message::ConfigTick));
         let mut restored = false;
+        let mut deferred_restore = false;
         let mut start_welcome = false;
         if let Some(dir) = options.state_dir {
             app.load_recent(dir.join(fogu_core::recent::RECENT_FILE));
@@ -263,10 +268,22 @@ impl App {
                     crate::recovery::InstanceClaim::Owner(lock) => {
                         app.instance_lock = Some(lock);
                         let enabled = app.config.recovery.enabled;
-                        restored = app.restore_session(&dir, enabled);
-                        if enabled {
-                            app.recovery = Some(crate::recovery::Recovery::new(dir));
-                            tasks.push(app.after(Duration::from_secs(1), Message::RecoveryTick));
+                        let mut recovery = crate::recovery::Recovery::new(dir);
+                        if enabled
+                            && cfg!(feature = "ssh")
+                            && app.config.recovery.restore_ssh_scrollback
+                        {
+                            recovery.pending_restore = true;
+                            app.recovery = Some(recovery);
+                            tasks.push(app.load_ssh_recovery_key(false));
+                            deferred_restore = true;
+                        } else {
+                            restored = app.restore_session(&mut recovery, enabled);
+                            if enabled {
+                                app.recovery = Some(recovery);
+                                tasks
+                                    .push(app.after(Duration::from_secs(1), Message::RecoveryTick));
+                            }
                         }
                     }
                     crate::recovery::InstanceClaim::Other => start_welcome = true,
@@ -290,7 +307,7 @@ impl App {
         if !app.toasts.is_empty() {
             tasks.push(app.after(AUTO_DISMISS, Message::ToastExpire));
         }
-        if start_welcome {
+        if start_welcome || deferred_restore {
             tasks.push(app.open_welcome());
         } else if !restored {
             let profile = app.default_profile();
