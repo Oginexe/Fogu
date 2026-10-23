@@ -479,6 +479,11 @@ fn appearance<'a>(ed: &'a ProfileEditor, config: &Config, look: Look) -> Row<'a>
         ),
     )];
     rows.extend(background(ed, look));
+    let ssh = matches!(p.kind, ProfileKind::Ssh(_));
+    let scrollback_enabled = !ssh || config.recovery.restore_ssh_scrollback;
+    let restores_scrollback = scrollback_enabled
+        && p.restore_scrollback
+            .unwrap_or(config.recovery.restore_scrollback || ssh);
     rows.extend([
         forms::toggle_desc(
             look,
@@ -486,14 +491,15 @@ fn appearance<'a>(ed: &'a ProfileEditor, config: &Config, look: Look) -> Row<'a>
             "Keep profile name as title",
             "Programs cannot rename the tab",
             p.disable_dynamic_title,
+            true,
         ),
         forms::toggle_desc(
             look,
             FieldId::RestoreScrollback,
             "Save scrollback",
             "Restored with the tab after a restart",
-            p.restore_scrollback
-                .unwrap_or(config.recovery.restore_scrollback),
+            restores_scrollback,
+            scrollback_enabled,
         ),
     ]);
     forms::section(look, "Appearance", rows)

@@ -237,15 +237,18 @@ pub struct Config {
     pub recovery: RecoveryCfg,
 }
 
-/// `[recovery]`: rebuild the tabs on restart. Saved scrollback may contain passwords or
-/// other secrets shown in the terminal. It is stored unencrypted, readable only by your user.
+/// `[recovery]`: rebuild the tabs on restart. Saved local scrollback may contain passwords or
+/// other secrets shown in the terminal. It is stored unencrypted, readable only by your user;
+/// SSH scrollback is encrypted with a key from the system keyring.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RecoveryCfg {
     /// Save and restore the tabs, splits and their profiles. `false` also deletes saved files.
     pub enabled: bool,
-    /// Also save each pane's scrollback (profiles may override with `restore_scrollback`).
+    /// Also save local panes' scrollback (profiles may override with `restore_scrollback`).
     pub restore_scrollback: bool,
+    /// Save SSH scrollback encrypted with a key kept in the system keyring.
+    pub restore_ssh_scrollback: bool,
     /// Lines of scrollback saved per pane.
     pub scrollback_lines: usize,
 }
@@ -255,6 +258,7 @@ impl Default for RecoveryCfg {
         Self {
             enabled: true,
             restore_scrollback: true,
+            restore_ssh_scrollback: false,
             scrollback_lines: 1000,
         }
     }
@@ -345,6 +349,13 @@ mod tests {
         assert!(Config::default().ssh.read_ssh_config);
         let config: Config = toml::from_str("[ssh]\nread_ssh_config = false\n").unwrap();
         assert!(!config.ssh.read_ssh_config);
+    }
+
+    #[test]
+    fn encrypted_ssh_scrollback_defaults_off() {
+        assert!(!Config::default().recovery.restore_ssh_scrollback);
+        let config: Config = toml::from_str("[recovery]\nrestore_ssh_scrollback = true\n").unwrap();
+        assert!(config.recovery.restore_ssh_scrollback);
     }
 
     #[test]

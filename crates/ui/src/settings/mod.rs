@@ -106,6 +106,7 @@ pub enum FieldId {
     ReadSshConfig,
     RecoveryEnabled,
     RecoveryScrollback,
+    RecoverySshScrollback,
     RecoveryLines,
 }
 
@@ -145,6 +146,8 @@ pub struct Settings {
     pub font_notes: Vec<String>,
     /// Why "Browse…" can't open a folder picker (`None` = it can).
     pub no_picker: Option<&'static str>,
+    /// The SSH scrollback toggle waits for its explanation modal.
+    pub pending_ssh_recovery: bool,
 }
 
 impl Settings {
@@ -271,6 +274,7 @@ impl Settings {
             F::ReadSshConfig => cfg.ssh.read_ssh_config = on(v)?,
             F::RecoveryEnabled => cfg.recovery.enabled = on(v)?,
             F::RecoveryScrollback => cfg.recovery.restore_scrollback = on(v)?,
+            F::RecoverySshScrollback => cfg.recovery.restore_ssh_scrollback = on(v)?,
             F::RecoveryLines => {
                 cfg.recovery.scrollback_lines =
                     number(v, cfg.recovery.scrollback_lines, 0, 1_000_000, 1)?;

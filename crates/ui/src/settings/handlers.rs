@@ -6,10 +6,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[cfg(feature = "ssh")]
+use fogu_core::SecretKey;
 use fogu_core::{Config, config};
 use iced::Task;
 use iced::advanced::widget::operate;
 use iced::advanced::widget::operation::focusable;
+use secrecy::SecretString;
 
 use super::{FieldId, Page, Settings};
 use crate::app::App;
@@ -17,6 +20,7 @@ use crate::appearance::{cursor_shape, resolve_scheme};
 use crate::forms::FieldValue;
 use crate::message::Message;
 use crate::metrics;
+use crate::modal::{Modal, ModalButton};
 use crate::notifications::{Level, Notification};
 use crate::palette::{Colors, Look};
 use crate::tab::{Tab, TabId};
@@ -30,6 +34,13 @@ pub enum SettingsMsg {
     Field(FieldId, FieldValue),
     /// The download folder picker closed (`None` = cancelled).
     Picked(Option<PathBuf>),
+    /// The answer to the SSH scrollback explanation.
+    ConfirmSshRecovery(bool),
+    /// Loading or creating the SSH scrollback key finished; `enable` came from the UI prompt.
+    SshRecoveryKeyLoaded {
+        enable: bool,
+        result: Result<SecretString, String>,
+    },
 }
 
 impl App {
@@ -62,6 +73,10 @@ impl App {
 
     pub(crate) fn on_settings(&mut self, message: SettingsMsg) -> Task<Message> {
         let (id, value) = match message {
+            SettingsMsg::ConfirmSshRecovery(yes) => return self.confirm_ssh_recovery(yes),
+            SettingsMsg::SshRecoveryKeyLoaded { enable, result } => {
+                return self.ssh_recovery_key_loaded(enable, result);
+            }
             SettingsMsg::Page(page) => {
                 if let Some(s) = self.settings_tab().and_then(|t| t.settings.as_deref_mut()) {
                     s.page = page;
@@ -78,11 +93,24 @@ impl App {
             }
             SettingsMsg::Field(id, value) => (id, value),
         };
+        if id == FieldId::RecoverySshScrollback
+            && matches!(value, FieldValue::Bool(true))
+            && !self.config.recovery.restore_ssh_scrollback
+        {
+            if let Some(settings) = self.settings_tab().and_then(|t| t.settings.as_deref_mut()) {
+                settings.pending_ssh_recovery = true;
+            }
+            return Task::none();
+        }
+        self.save_setting(id, &value)
+    }
+
+    fn save_setting(&mut self, id: FieldId, value: &FieldValue) -> Task<Message> {
         let mut new = Config::clone(&self.config);
         let Some(settings) = self.settings_tab().and_then(|t| t.settings.as_deref_mut()) else {
             return Task::none();
         };
-        if settings.reduce(&mut new, id, &value).is_err() || new == *self.config {
+        if settings.reduce(&mut new, id, value).is_err() || new == *self.config {
             return Task::none();
         }
         let dir = config::config_dir(self.config_dir.as_deref());
@@ -94,6 +122,118 @@ impl App {
         self.remember_config_file();
         let old = std::mem::replace(&mut self.config, Arc::new(new));
         self.apply_settings(&old)
+    }
+
+    pub(crate) fn ssh_recovery_modal(&self) -> Option<Modal> {
+        self.tabs
+            .iter()
+            .find_map(|tab| tab.settings.as_deref())?
+            .pending_ssh_recovery
+            .then(|| Modal {
+                title: "Keep SSH history after restart?",
+                body: "Fogu locks it with your system's password vault. Your computer may ask for your password once."
+                    .to_owned(),
+                buttons: vec![
+                    ModalButton {
+                        label: "Turn on",
+                        on_press: Message::Settings(SettingsMsg::ConfirmSshRecovery(true)),
+                    },
+                    ModalButton {
+                        label: "Cancel",
+                        on_press: Message::Settings(SettingsMsg::ConfirmSshRecovery(false)),
+                    },
+                ],
+            })
+    }
+
+    fn confirm_ssh_recovery(&mut self, yes: bool) -> Task<Message> {
+        if let Some(settings) = self.settings_tab().and_then(|t| t.settings.as_deref_mut()) {
+            settings.pending_ssh_recovery = false;
+        }
+        if !yes {
+            return Task::none();
+        }
+        self.load_ssh_recovery_key(true)
+    }
+
+    /// Reads the persistent key without blocking the UI, creating it when the keyring is empty.
+    pub(crate) fn load_ssh_recovery_key(&mut self, enable: bool) -> Task<Message> {
+        #[cfg(feature = "ssh")]
+        {
+            let secrets = self.runtime.secrets().clone();
+            Task::perform(
+                async move {
+                    // Two lookups racing on an empty keyring would each create a different key.
+                    static LOOKUP: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+                    let _one_at_a_time = LOOKUP.lock().await;
+                    if let Some(key) = secrets
+                        .get(&SecretKey::RecoveryKey)
+                        .await
+                        .map_err(|e| e.to_string())?
+                    {
+                        Ok(key)
+                    } else {
+                        let key = fogu_session::new_recovery_key().map_err(|e| e.to_string())?;
+                        secrets
+                            .set(&SecretKey::RecoveryKey, key.clone())
+                            .await
+                            .map_err(|e| e.to_string())?;
+                        Ok(key)
+                    }
+                },
+                move |result| {
+                    Message::Settings(SettingsMsg::SshRecoveryKeyLoaded { enable, result })
+                },
+            )
+        }
+        #[cfg(not(feature = "ssh"))]
+        {
+            let _ = enable;
+            self.notify(
+                Notification::new(Level::Warn, "SSH history not turned on")
+                    .detail("The system keyring is locked or missing."),
+            )
+        }
+    }
+
+    fn ssh_recovery_key_loaded(
+        &mut self,
+        enable: bool,
+        result: Result<SecretString, String>,
+    ) -> Task<Message> {
+        let key = match result {
+            Ok(key) => key,
+            Err(err) => {
+                tracing::warn!(error = %err, "SSH recovery key unavailable");
+                let note = self.notify(
+                    Notification::new(Level::Warn, "SSH history not turned on")
+                        .detail("The system keyring is locked or missing."),
+                );
+                return Task::batch([note, self.finish_deferred_restore()]);
+            }
+        };
+        #[cfg(feature = "ssh")]
+        if let Err(err) = fogu_session::validate_recovery_key(&key) {
+            tracing::warn!(error = %err, "invalid SSH recovery key");
+            let note = self.notify(
+                Notification::new(Level::Warn, "SSH history not turned on")
+                    .detail("The system keyring is locked or missing."),
+            );
+            return Task::batch([note, self.finish_deferred_restore()]);
+        }
+        if (enable || self.config.recovery.restore_ssh_scrollback)
+            && let Some(recovery) = &mut self.recovery
+            && let Err(err) = recovery.set_ssh_key(key)
+        {
+            tracing::warn!(error = %err, "invalid SSH recovery key");
+        }
+        let restore = self.finish_deferred_restore();
+        let setting = if enable && !self.config.recovery.restore_ssh_scrollback {
+            self.save_setting(FieldId::RecoverySshScrollback, &FieldValue::Bool(true))
+        } else {
+            Task::none()
+        };
+        Task::batch([restore, setting])
     }
 
     /// Records the current config file stamp so an edit Fogu just made is not hot-reloaded.
@@ -162,6 +302,7 @@ impl App {
     /// Applies what changed from `old` to the running config to the app.
     #[expect(clippy::float_cmp, reason = "detects an edited value, no arithmetic")]
     fn apply_settings(&mut self, old: &Config) -> Task<Message> {
+        let mut tasks = Vec::new();
         let (was, now) = (&old.appearance, self.config.appearance.clone());
         if was.font_family != now.font_family || was.fallback_fonts != now.fallback_fonts {
             let (resolved, notes) = metrics::resolve(&now.font_family, &now.fallback_fonts);
@@ -195,9 +336,28 @@ impl App {
             self.profiles.width = now.profiles_sidebar_width;
         }
         if old.ssh.read_ssh_config != self.config.ssh.read_ssh_config {
-            return self.refresh_ssh_hosts();
+            tasks.push(self.refresh_ssh_hosts());
         }
-        Task::none()
+        if old.recovery.restore_ssh_scrollback && !self.config.recovery.restore_ssh_scrollback {
+            if let Some(recovery) = &mut self.recovery {
+                if let Err(err) = recovery.clear_encrypted_scrollback() {
+                    tracing::warn!(error = %err, "could not delete encrypted scrollback");
+                }
+            } else if let Some(dir) = &self.state_dir
+                && let Err(err) = fogu_core::recovery::clear_encrypted_scrollback(dir)
+            {
+                tracing::warn!(error = %err, "could not delete encrypted scrollback");
+            }
+        } else if !old.recovery.restore_ssh_scrollback
+            && self.config.recovery.restore_ssh_scrollback
+            && self
+                .recovery
+                .as_ref()
+                .is_none_or(|recovery| !recovery.has_ssh_key())
+        {
+            tasks.push(self.load_ssh_recovery_key(false));
+        }
+        Task::batch(tasks)
     }
 }
 

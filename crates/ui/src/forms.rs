@@ -141,7 +141,7 @@ pub(crate) fn input<'a, Id: Copy + 'a>(
 }
 
 /// A switch: a 28 × 16 track with a 12 px knob, right and lit when `on`.
-pub(crate) fn switch<'a, M: Clone + 'a>(look: Look, on: bool, toggle: M) -> Element<'a, M> {
+pub(crate) fn switch<'a, M: Clone + 'a>(look: Look, on: bool, toggle: Option<M>) -> Element<'a, M> {
     let knob_color = if on { t::A200 } else { look.dim };
     let knob = container(space())
         .width(12)
@@ -175,7 +175,7 @@ pub(crate) fn switch<'a, M: Clone + 'a>(look: Look, on: bool, toggle: M) -> Elem
                 ..button::Style::default()
             }
         })
-        .on_press(toggle)
+        .on_press_maybe(toggle)
         .into()
 }
 
@@ -318,7 +318,7 @@ pub fn toggle<'a, Id: Copy + 'a>(
     labeled(
         look,
         label,
-        switch(look, value, Field(id, FieldValue::Bool(!value))),
+        switch(look, value, Some(Field(id, FieldValue::Bool(!value)))),
     )
 }
 
@@ -329,9 +329,14 @@ pub fn toggle_desc<'a, Id: Copy + 'a>(
     label: &str,
     desc: &str,
     value: bool,
+    enabled: bool,
 ) -> Element<'a, Field<Id>> {
     let control = row![
-        switch(look, value, Field(id, FieldValue::Bool(!value))),
+        switch(
+            look,
+            value,
+            enabled.then_some(Field(id, FieldValue::Bool(!value)))
+        ),
         text(desc.to_owned()).size(12).color(look.dim),
     ]
     .spacing(10)

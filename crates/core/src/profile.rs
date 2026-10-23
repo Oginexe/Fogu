@@ -168,8 +168,8 @@ pub struct Profile {
     /// Colour or image drawn under this profile's tabs (a tab may override it).
     #[serde(default)]
     pub background: Option<Background>,
-    /// Save this profile's scrollback for tab recovery (unset = `recovery.restore_scrollback`);
-    /// `false` for SSH hosts whose output must never touch the disk.
+    /// Save this profile's scrollback for tab recovery. For SSH this can turn off the global
+    /// encrypted SSH recovery setting; for local profiles unset means `recovery.restore_scrollback`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restore_scrollback: Option<bool>,
     /// Kind-specific options, flattened into the same TOML table (`type = "local"` / `"ssh"`).

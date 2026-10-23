@@ -61,12 +61,14 @@ fn session_round_trips_with_private_modes() {
     insta::assert_snapshot!(std::fs::read_to_string(dir.join(SESSION_FILE)).unwrap());
     assert_eq!(load(&dir).unwrap(), Some(state));
     save_scrollback(&dir, "a-1", b"{}").unwrap();
+    save_encrypted_scrollback(&dir, "a-2", b"sealed").unwrap();
     #[cfg(unix)]
     {
         assert_eq!(mode(&dir), 0o700);
         assert_eq!(mode(&dir.join(SCROLLBACK_DIR)), 0o700);
         assert_eq!(mode(&dir.join(SESSION_FILE)), 0o600);
         assert_eq!(mode(&scrollback_path(&dir, "a-1")), 0o600);
+        assert_eq!(mode(&encrypted_scrollback_path(&dir, "a-2")), 0o600);
     }
     clear(&dir).unwrap();
     assert!(load(&dir).unwrap().is_none());
@@ -109,10 +111,21 @@ fn prune_drops_closed_panes_then_the_oldest_beyond_the_cap() {
         std::thread::sleep(std::time::Duration::from_millis(15));
     }
     let keep: BTreeSet<String> = ["old", "mid", "new"].map(str::to_owned).into();
-    prune_scrollback(&dir, &keep, 90).unwrap();
+    prune_scrollback(&dir, &keep, Some(&BTreeSet::new()), 90).unwrap();
     let left = |k: &str| scrollback_path(&dir, k).exists();
     assert!(!left("closed") && !left("old"));
     assert!(left("mid") && left("new"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn encrypted_files_can_be_cleared_without_touching_plain_scrollback() {
+    let dir = tmp("clear-encrypted");
+    save_scrollback(&dir, "plain", b"{}").unwrap();
+    save_encrypted_scrollback(&dir, "secret", b"sealed").unwrap();
+    clear_encrypted_scrollback(&dir).unwrap();
+    assert!(scrollback_path(&dir, "plain").exists());
+    assert!(!encrypted_scrollback_path(&dir, "secret").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

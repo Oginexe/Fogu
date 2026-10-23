@@ -14,6 +14,8 @@ const DEFAULT_PORT: u16 = 22;
 /// One stored secret.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SecretKey {
+    /// The key that encrypts SSH scrollback saved for tab recovery.
+    RecoveryKey,
     /// The password of `user@host:port`.
     SshPassword {
         /// Remote user.
@@ -54,6 +56,9 @@ impl SecretKey {
     pub fn attributes(&self) -> BTreeMap<&'static str, String> {
         let mut map = BTreeMap::from([("application", APPLICATION.to_owned())]);
         match self {
+            Self::RecoveryKey => {
+                map.insert("kind", "recovery-key".to_owned());
+            }
             Self::SshPassword { user, host, port } => {
                 map.insert("kind", "ssh-password".to_owned());
                 map.insert("user", user.clone());
@@ -77,6 +82,7 @@ impl SecretKey {
     #[must_use]
     pub fn label(&self) -> String {
         match self {
+            Self::RecoveryKey => "Fogu SSH scrollback recovery key".to_owned(),
             Self::SshPassword { user, host, port } if *port == DEFAULT_PORT => {
                 format!("Fogu SSH password for {user}@{host}")
             }
@@ -104,6 +110,15 @@ mod tests {
 
     #[test]
     fn attributes_and_labels() {
+        let recovery = SecretKey::RecoveryKey;
+        assert_eq!(
+            key(&recovery),
+            [
+                ("application", "fogu".to_owned()),
+                ("kind", "recovery-key".to_owned()),
+            ]
+        );
+        assert_eq!(recovery.label(), "Fogu SSH scrollback recovery key");
         let pw = SecretKey::SshPassword {
             user: "alice".into(),
             host: "Box.Example".into(),

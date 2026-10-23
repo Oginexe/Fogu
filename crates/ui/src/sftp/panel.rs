@@ -230,7 +230,7 @@ pub fn view<'a>(
         crate::forms::switch(
             look,
             panel.listing.show_hidden,
-            msg(tab, PanelMsg::ShowHidden(!panel.listing.show_hidden))
+            Some(msg(tab, PanelMsg::ShowHidden(!panel.listing.show_hidden)))
         ),
         label("Hidden", look.dim).size(12),
     ]
@@ -299,7 +299,7 @@ fn follow_controls(tab: TabId, panel: &SftpPanelState, look: Look) -> Element<'_
         crate::forms::switch(
             look,
             panel.follow,
-            msg(tab, PanelMsg::Follow(!panel.follow))
+            Some(msg(tab, PanelMsg::Follow(!panel.follow)))
         ),
     ]
     .spacing(6)
