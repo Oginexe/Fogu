@@ -84,8 +84,8 @@ fn cipher(secret: &SecretString) -> Result<LessSafeKey, RecoveryCryptoError> {
         return Err(RecoveryCryptoError::Key);
     }
     let mut bytes = Zeroizing::new([0_u8; KEY_BYTES]);
-    let (pairs, remainder) = text.as_chunks::<2>();
-    debug_assert_eq!(remainder, []);
+    // The length check above leaves no remainder.
+    let (pairs, _) = text.as_chunks::<2>();
     for (out, pair) in bytes.iter_mut().zip(pairs) {
         *out = (hex(pair[0]).ok_or(RecoveryCryptoError::Key)? << 4)
             | hex(pair[1]).ok_or(RecoveryCryptoError::Key)?;
