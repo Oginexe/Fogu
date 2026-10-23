@@ -27,7 +27,7 @@ const LOG_MAX_BYTES: u64 = 4 * 1024 * 1024;
 fn main() -> fogu_ui::Result {
     harden_process();
     let cli = Cli::parse();
-    cli::reexec_for_software_render(&cli);
+    cli::reexec_with_env(&cli);
     let state_dir = state_dir();
     crash::install(state_dir.as_ref().ok().cloned());
     init_logging(&state_dir);

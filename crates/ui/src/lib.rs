@@ -134,6 +134,9 @@ pub fn run(config: Arc<Config>, options: RunOptions) -> Result {
         decorations: cfg!(target_os = "macos"),
         // See-through terminals (`App::style` clears to transparent); read once, at creation.
         transparent: config.appearance.window_opacity < 1.0,
+        // winit 0.30 blurs through `org_kde_kwin_blur`, which KWin 6.8 dropped for
+        // `ext_background_effect_v1`: no blur there until winit speaks it.
+        // TODO(winit/iced upgrade): check blur on KWin ≥ 6.8 again.
         blur: config.appearance.window_opacity < 1.0 && config.appearance.window_blur,
         ..Default::default()
     };
