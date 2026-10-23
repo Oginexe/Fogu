@@ -95,10 +95,17 @@ pub fn system_known_hosts() -> Option<PathBuf> {
 }
 
 /// Whether looking at `path` stays on this machine: `false` for a Windows UNC or device path
-/// (`\\host\share`, `//host/share`, `\\?\UNC\…`, `\\.\pipe\…`), where even a metadata
+/// (`\\host\share`, `//host/share`, `\\?\UNC\…`, `\??\UNC\…`, `\\.\pipe\…`), where even a metadata
 /// lookup connects to the host and sends the user's NTLM credentials. Always `true` on Unix.
 #[must_use]
 pub fn is_local_path(path: &Path) -> bool {
+    // `\??\…` names the NT object namespace: Windows passes it through as is (so
+    // `\??\UNC\host\share` is a share), while Rust parses it as a plain root.
+    let bytes = path.as_os_str().as_encoded_bytes();
+    let nt = matches!(bytes, [b'\\' | b'/', b'?', b'?', b'\\' | b'/', ..]);
+    if cfg!(windows) && nt {
+        return false;
+    }
     match path.components().next() {
         Some(Component::Prefix(prefix)) => {
             matches!(prefix.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_))
@@ -149,6 +156,8 @@ mod tests {
             r"\\?\UNC\host\share",
             r"\\.\pipe\x",
             r"\\?\GLOBALROOT\x",
+            r"\??\UNC\host\share",
+            "/??/UNC/host/share",
         ];
         for p in remote {
             assert_eq!(is_local_path(p.as_ref()), cfg!(unix), "{p}");
