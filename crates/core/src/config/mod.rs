@@ -171,7 +171,7 @@ pub struct TerminalCfg {
     pub alt_is_meta: bool,
     /// Scrolls to the bottom when the user types.
     pub scroll_on_input: bool,
-    /// Lines scrolled per wheel notch.
+    /// Lines scrolled per wheel notch; a line-height of trackpad travel counts as a notch.
     pub wheel_lines: u32,
     /// Share of the split a resize-pane hotkey moves.
     pub pane_resize_step: f32,
