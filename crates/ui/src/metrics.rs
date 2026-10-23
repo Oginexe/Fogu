@@ -133,11 +133,11 @@ pub fn grid_origin(bounds: iced::Rectangle) -> iced::Point {
     bounds.position() + GRID_PAD
 }
 
-/// The part of a widget of `size` left for the grid.
+/// The part of a widget of `size` left for the grid: `GRID_PAD` kept on every side.
 pub fn grid_room(size: iced::Size) -> iced::Size {
     iced::Size::new(
-        (size.width - GRID_PAD.x).max(0.0),
-        (size.height - GRID_PAD.y).max(0.0),
+        (size.width - 2.0 * GRID_PAD.x).max(0.0),
+        (size.height - 2.0 * GRID_PAD.y).max(0.0),
     )
 }
 
@@ -462,7 +462,7 @@ mod tests {
     fn the_grid_sits_inside_a_left_and_top_margin() {
         let m = CellMetrics::new(FontUnits::FALLBACK, 16.0, 1.0);
         // cell 10 × 19
-        let size = iced::Size::new(800.0 + GRID_PAD.x, 456.0 + GRID_PAD.y);
+        let size = iced::Size::new(800.0 + 2.0 * GRID_PAD.x, 456.0 + 2.0 * GRID_PAD.y);
         let widget = iced::Rectangle::new(iced::Point::new(100.0, 50.0), size);
         let start = grid_origin(widget);
         assert!(start.x >= 106.0 && start.y >= 54.0, "no margin: {start:?}");
