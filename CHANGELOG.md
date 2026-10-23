@@ -23,6 +23,7 @@
   checked against their hashes.
 
 ### Changed
-- The Linux binary is 34% smaller (29.3 → 19.4 MB) at the same speed.
+- The Linux binary is 34% smaller (29.3 → 19.4 MB), opens its first frame faster, uses about
+  9% less memory and 21 fewer threads, with the same terminal throughput.
 - One log file, `fogu.log`, rotated at start-up past 4 MB (it replaces the daily files).
 - Clearer errors: failed saves name the file.
