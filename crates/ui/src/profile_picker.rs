@@ -365,7 +365,10 @@ pub(crate) fn overlay<'a>(
     rows: &[FuzzyRow],
     look: Look,
 ) -> Element<'a, Message> {
-    let Some(picker) = picker else { return base };
+    // Wrapped even when closed: see `context_menu::overlay`.
+    let Some(picker) = picker else {
+        return stack![base].into();
+    };
     let shown = fuzzy_list::rank(&picker.filter, rows);
     let mut list = column![].spacing(1);
     for (pos, &index) in shown.iter().enumerate() {

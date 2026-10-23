@@ -29,7 +29,10 @@ pub struct Modal {
 
 /// Stacks `modal` over `base`; just `base` when `modal` is `None`.
 pub fn overlay(base: Element<'_, Message>, modal: Option<Modal>) -> Element<'_, Message> {
-    let Some(modal) = modal else { return base };
+    // Wrapped even when closed: see `context_menu::overlay`.
+    let Some(modal) = modal else {
+        return stack![base].into();
+    };
     // The first button is the action (outlined in the accent), the others back out.
     let mut buttons = row![].spacing(8);
     for (i, b) in modal.buttons.into_iter().enumerate() {

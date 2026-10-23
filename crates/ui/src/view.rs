@@ -291,7 +291,8 @@ impl App {
             .or_else(|| self.forwards_view());
         let base = match dialog {
             Some(dialog) => modal::over(base, dialog),
-            None => base,
+            // Wrapped even when closed: see `context_menu::overlay`.
+            None => iced::widget::stack![base].into(),
         };
         let (entries, rows) = match self.picker {
             Some(_) => profile_picker::listing(self),
@@ -311,7 +312,7 @@ impl App {
                     .height(iced::Length::Fill);
                 iced::widget::stack![base, placed].into()
             }
-            None => base,
+            None => iced::widget::stack![base].into(),
         };
         // macOS: winit cannot start a resize from the app; the native frame resizes instead.
         if self.fullscreen || cfg!(target_os = "macos") {
