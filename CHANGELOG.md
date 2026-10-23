@@ -13,7 +13,8 @@
 - Windows: Fogu's files get an access list for you and SYSTEM only; an SSH agent pipe created by
   another user is refused.
 - Windows: SFTP downloads refuse every reserved device name; profiles whose user or host differ
-  only in case no longer share a stored password (re-enter it once).
+  only in case no longer share a stored password (stored secrets move to the new names by
+  themselves).
 - Pasted text can't end a bracketed paste with an 8-bit control character.
 - Tab titles drop bidirectional override characters, so a title can't read reversed.
 - Passwords read from the macOS Keychain and Windows Credential Manager leave no unzeroed copy.
