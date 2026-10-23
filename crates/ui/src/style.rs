@@ -130,7 +130,7 @@ pub(crate) fn dialog(theme: &Theme) -> container::Style {
     let p = theme.palette();
     container::Style {
         background: Some(Background::Color(p.background)),
-        border: t::ring_lg(t::R_DIALOG),
+        border: t::ring_lg(t::R_DIALOG, theme.extended_palette().is_dark),
         shadow: t::shadow_lg(),
         text_color: Some(p.text),
         ..container::Style::default()
@@ -171,7 +171,7 @@ pub(crate) fn card(look: Look, radius: f32) -> container::Style {
 pub(crate) fn floating(look: Look, radius: f32) -> container::Style {
     container::Style {
         background: Some(Background::Color(look.surface)),
-        border: t::ring_lg(radius),
+        border: t::ring_lg(radius, look.dark),
         shadow: t::shadow_lg(),
         text_color: Some(look.fg),
         ..container::Style::default()
@@ -196,6 +196,16 @@ pub(crate) fn glow(color: Color, a: f32, blur: f32) -> Shadow {
     }
 }
 
+/// A thin vertical scrollbar, to pair with [`scrollbar`].
+pub(crate) fn thin() -> scrollable::Direction {
+    scrollable::Direction::Vertical(
+        scrollable::Scrollbar::new()
+            .width(4)
+            .scroller_width(4)
+            .margin(2),
+    )
+}
+
 /// A quiet scrollbar: no rail, a thin neutral thumb that lightens under the pointer.
 pub(crate) fn scrollbar(theme: &Theme, status: scrollable::Status) -> scrollable::Style {
     let mut style = scrollable::default(theme, status);
@@ -208,7 +218,7 @@ pub(crate) fn scrollbar(theme: &Theme, status: scrollable::Status) -> scrollable
         rail.background = None;
         rail.border = Border::default();
         rail.scroller.background = Background::Color(thumb);
-        rail.scroller.border = Border::default().rounded(4);
+        rail.scroller.border = Border::default().rounded(2);
     }
     style
 }

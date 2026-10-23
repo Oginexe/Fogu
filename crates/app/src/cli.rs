@@ -9,6 +9,12 @@ use std::ffi::OsString;
 
 /// Environment variable iced's renderer selection reads (`tiny-skia` = CPU rendering).
 const BACKEND_ENV: &str = "ICED_BACKEND";
+/// Mesa option that lists 8-bit BGRA first among a window's surface formats. iced 0.14 takes the
+/// first one, which on RADV is `Rgb10a2Unorm`: 2 alpha bits, so window opacity snaps to 0, ⅓,
+/// ⅔ or 1. Ignored by non-Mesa drivers.
+/// TODO(iced 0.15): drop it; iced master already skips `Rgb10a2` formats.
+#[cfg(target_os = "linux")]
+const MESA_BGRA8_FIRST: &str = "vk_wsi_force_bgra8_unorm_first";
 
 const HELP: &str = "\
 Fogu: a native terminal emulator
@@ -93,42 +99,49 @@ impl Cli {
     }
 }
 
-/// `--software-render` must reach iced as `ICED_BACKEND=tiny-skia` before it starts. Setting an
-/// environment variable in-process is `unsafe` (denied outside `fogu_core::winsec`), so the
-/// process re-executes itself once with the variable set. Returns only if no re-exec was needed
-/// (or it failed, which is logged and ignored: the GPU renderer then runs as usual).
-pub fn reexec_for_software_render(cli: &Cli) {
-    if !cli.software_render || std::env::var_os(BACKEND_ENV).is_some_and(|v| v == "tiny-skia") {
+/// Environment variables iced and the GPU driver read at start-up: `ICED_BACKEND=tiny-skia` for
+/// `--software-render`, and on Linux [`MESA_BGRA8_FIRST`]. Setting one in-process is `unsafe`
+/// (denied outside `fogu_core::winsec`), so the process re-executes itself once with them set.
+/// Returns only if no re-exec was needed (or it failed, which is logged and ignored).
+pub fn reexec_with_env(cli: &Cli) {
+    let mut wanted = Vec::new();
+    if cli.software_render {
+        wanted.push((BACKEND_ENV, "tiny-skia"));
+    }
+    #[cfg(target_os = "linux")]
+    wanted.push((MESA_BGRA8_FIRST, "true"));
+    if wanted
+        .iter()
+        .all(|(key, value)| std::env::var_os(key).is_some_and(|v| v == *value))
+    {
         return;
     }
     let Ok(exe) = std::env::current_exe() else {
-        eprintln!("fogu: --software-render: cannot find own executable; using the GPU");
+        eprintln!("fogu: cannot find own executable to set {wanted:?}; starting without");
         return;
     };
     let mut command = Command::new(exe);
-    command
-        .args(std::env::args_os().skip(1))
-        .env(BACKEND_ENV, "tiny-skia");
+    command.args(std::env::args_os().skip(1)).envs(wanted);
     #[cfg(unix)]
     {
         let err = command.exec();
-        eprintln!("fogu: --software-render: re-exec failed ({err}); using the GPU");
+        eprintln!("fogu: re-exec failed ({err}); starting without the environment variables");
     }
     #[cfg(windows)]
     {
-        // Windows has no `exec`: start the child (which sees the environment variable and
+        // Windows has no `exec`: start the child (which sees the environment variables and
         // skips this branch), wait for it and relay its exit code.
         match command.spawn() {
             Ok(mut child) => match child.wait() {
                 Ok(status) => std::process::exit(status.code().unwrap_or(1)),
                 Err(err) => {
-                    eprintln!(
-                        "fogu: --software-render: cannot wait for the re-exec ({err}); using the GPU"
-                    );
+                    eprintln!("fogu: cannot wait for the re-exec ({err}); starting here");
                 }
             },
             Err(err) => {
-                eprintln!("fogu: --software-render: re-exec failed ({err}); using the GPU");
+                eprintln!(
+                    "fogu: re-exec failed ({err}); starting without the environment variables"
+                );
             }
         }
     }

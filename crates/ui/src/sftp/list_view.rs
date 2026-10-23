@@ -168,6 +168,7 @@ fn rows(tab: TabId, panel: &SftpPanelState, look: Look) -> Element<'_, Message> 
     list = list.push(Space::new().height(rows_px(visible.len() - end)));
     scrollable(list)
         .id(Id::new(LIST_ID))
+        .direction(crate::style::thin())
         .style(crate::style::scrollbar)
         .height(Length::Fill)
         .on_scroll(move |v| {

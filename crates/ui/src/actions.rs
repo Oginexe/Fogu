@@ -17,7 +17,7 @@ use crate::message::{Message, PasteSource};
 use crate::notifications::{Level, Notification};
 use crate::panes::{CloseTarget, CwdFor, CwdQuery, SPLIT_CWD_WAIT};
 use crate::tab::{Pane, PaneId, Tab, TabId};
-use crate::tab_bar::{RENAME_INPUT, Rename, TAB_STRIDE, TAB_STRIP, TAB_W};
+use crate::tab_bar::{RENAME_INPUT, Rename, TAB_GAP, TAB_STRIP};
 
 /// Logical px the pointer must move with the title bar pressed before the window moves.
 const DRAG_THRESHOLD: f32 = 4.0;
@@ -491,7 +491,8 @@ impl App {
         let Some(index) = self.tabs.iter().position(|t| t.id == self.active) else {
             return Task::none();
         };
-        let left = crate::metrics::cells_f32(index) * TAB_STRIDE;
+        let tab_w = self.tab_w();
+        let left = crate::metrics::cells_f32(index) * (tab_w + TAB_GAP);
         let Some(viewport) = self.tab_strip else {
             // Not overflowing yet as far as we know: a new last tab may be the first that does.
             return if index + 1 == self.tabs.len() {
@@ -503,8 +504,8 @@ impl App {
         let (x, width) = (viewport.absolute_offset().x, viewport.bounds().width);
         let to = if left < x {
             left
-        } else if left + TAB_W > x + width {
-            left + TAB_W - width
+        } else if left + tab_w > x + width {
+            left + tab_w - width
         } else {
             return Task::none();
         };

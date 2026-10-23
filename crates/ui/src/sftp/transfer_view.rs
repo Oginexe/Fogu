@@ -35,6 +35,7 @@ pub(super) fn transfers(tab: TabId, panel: &SftpPanelState, look: Look) -> Eleme
         strip = strip.push(
             scrollable(rows)
                 .height(Length::Shrink)
+                .direction(crate::style::thin())
                 .style(crate::style::scrollbar),
         );
     }

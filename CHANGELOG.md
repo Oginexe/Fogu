@@ -8,6 +8,10 @@
   [#3](https://github.com/Revdep/Fogu/pull/3). Thank you!
 - SSH tabs can keep their history after a restart (off by default, Settings → Tab recovery). It is
   saved only encrypted, with a key kept in your system's password vault.
+- A thin terminal scrollbar you can drag through the history; a click on its track jumps there.
+- Settings → Appearance → Window → Rounded corners: panes, side panels and pages as rounded
+  tiles (on by default), now also for a single pane, a see-through window and a colour tab
+  background.
 
 ### Security
 - Windows: network (UNC) paths in links and in the working directory a program reports are never
@@ -29,3 +33,13 @@
   9% less memory and 21 fewer threads, with the same terminal throughput.
 - One log file, `fogu.log`, rotated at start-up past 4 MB (it replaces the daily files).
 - Clearer errors: failed saves name the file.
+- Tab headers shrink to fit before the tab bar scrolls, and the bar always keeps room to grab and
+  move the window.
+- Thinner scrollbars everywhere; menus and dialogs get a dark ring on dark themes.
+
+### Fixed
+- Window opacity on Linux (Mesa) works in small steps instead of jumping between opaque and two
+  thirds.
+- Trackpad scrolling is as fast as the mouse wheel.
+- Right-clicking a tab no longer scrolls the tab bar back to the start.
+- The terminal keeps the same margin on all four sides.

@@ -7,6 +7,7 @@ use iced::widget::{column, container};
 use iced::{Element, Subscription, event, window};
 
 use crate::app::App;
+use crate::background::Backdrop;
 use crate::context_menu;
 use crate::drag::{DragMsg, Payload};
 use crate::message::Message;
@@ -33,6 +34,16 @@ impl App {
             return column![].into();
         };
         if let Some(page) = self.page(tab) {
+            let page = match self.tile_colors() {
+                Some((ground, ring)) => container(iced::widget::stack![
+                    page,
+                    crate::split_container::Corners::new(ground, ring)
+                ])
+                .padding(crate::split_container::TILE_EDGE)
+                .style(move |_theme: &iced::Theme| container::background(ground))
+                .into(),
+                None => page,
+            };
             return self.chrome(page, None, None);
         }
         let search = self.search_in(tab);
@@ -53,9 +64,20 @@ impl App {
         };
         let (backdrop, terminal_alpha) = self.backdrop(tab);
         let window_alpha = self.window_alpha();
+        // A colour backdrop is just the panes' fill, so it keeps the tiles; an image can't.
+        let (backdrop, fill) = match backdrop {
+            Some(Backdrop::Color(color)) => (None, color),
+            other => (
+                other,
+                iced::Color {
+                    a: window_alpha,
+                    ..to_iced(self.colors.background())
+                },
+            ),
+        };
         let layout = tab.solo.as_ref().unwrap_or(&tab.layout);
         let grips = layout.leaves().len() > 1;
-        let tile_splits = use_tiles(grips, backdrop.is_some(), window_alpha);
+        let tile_splits = backdrop.is_none();
         let panes = layout
             .leaves()
             .into_iter()
@@ -96,22 +118,13 @@ impl App {
             .collect();
         let mut divider = to_iced(self.colors.foreground());
         divider.a = 0.3;
-        let mut split = SplitContainer::new(
-            tab.id,
-            layout,
-            panes,
-            iced::Color {
-                a: window_alpha,
-                ..to_iced(self.colors.background())
-            },
-            divider,
-        )
-        .backdrop(backdrop);
+        let mut split =
+            SplitContainer::new(tab.id, layout, panes, fill, divider).backdrop(backdrop);
         if let Some(drag) = self.drag.as_ref().filter(|d| d.started) {
             split = split.dropping(drag.target, self.look.accent);
         }
         // Focused pane border: the tab colour, else the accent once there is more than one pane;
-        // split panes float as tiles.
+        // panes float as tiles.
         let border = tab
             .color
             .map(context_menu::to_iced)
@@ -119,17 +132,10 @@ impl App {
         if let Some(color) = border {
             split = split.border(tab.focused, color);
         }
-        if tile_splits {
+        if let Some((ground, ring)) = self.tile_colors().filter(|_| tile_splits) {
             split = split.tiles(
-                iced::Color {
-                    a: window_alpha,
-                    ..self.look.raised
-                },
-                if self.look.dark {
-                    crate::tokens::N900
-                } else {
-                    self.look.border
-                },
+                ground,
+                ring,
                 crate::tokens::alpha(border.unwrap_or(self.look.accent), 0.25),
             );
         }
@@ -180,6 +186,23 @@ impl App {
             ),
         };
         Some(crate::settings::page(settings, &cx))
+    }
+
+    /// With rounded corners on: the ground around the tiles and their ring colour.
+    fn tile_colors(&self) -> Option<(iced::Color, iced::Color)> {
+        let ground = iced::Color {
+            a: self.window_alpha(),
+            ..self.look.raised
+        };
+        let ring = if self.look.dark {
+            crate::tokens::N900
+        } else {
+            self.look.border
+        };
+        self.config
+            .appearance
+            .rounded_corners
+            .then_some((ground, ring))
     }
 
     /// Room before the tab headers: the native window buttons on macOS (hidden in full screen).
@@ -234,8 +257,15 @@ impl App {
             .filter(|pane| pane.state.is_running() && (!pane.is_ssh() || pane.connection.is_some()))
             .map(|pane| pane.profile.id.clone())
             .collect();
-        let panes =
-            profiles::view::with_sidebar(panes, &self.profiles, &self.config, &live, self.look);
+        let ground = self.tile_colors().map(|(ground, _)| ground);
+        let panes = profiles::view::with_sidebar(
+            panes,
+            &self.profiles,
+            &self.config,
+            &live,
+            self.look,
+            ground,
+        );
         self.overlays(column![bar, panes].into(), dialog)
     }
 
@@ -261,7 +291,8 @@ impl App {
             .or_else(|| self.forwards_view());
         let base = match dialog {
             Some(dialog) => modal::over(base, dialog),
-            None => base,
+            // Wrapped even when closed: see `context_menu::overlay`.
+            None => iced::widget::stack![base].into(),
         };
         let (entries, rows) = match self.picker {
             Some(_) => profile_picker::listing(self),
@@ -281,7 +312,7 @@ impl App {
                     .height(iced::Length::Fill);
                 iced::widget::stack![base, placed].into()
             }
-            None => base,
+            None => iced::widget::stack![base].into(),
         };
         // macOS: winit cannot start a resize from the app; the native frame resizes instead.
         if self.fullscreen || cfg!(target_os = "macos") {
@@ -437,30 +468,11 @@ impl App {
     }
 }
 
-/// Tile splits need an opaque, undecorated ground; backdrops and translucent windows use the
-/// classic edge-to-edge split look.
-fn use_tiles(split: bool, backdrop: bool, window_alpha: f32) -> bool {
-    split && !backdrop && window_alpha >= 1.0
-}
-
 /// `path` with the home directory shown as `~`.
 fn tilde(path: &std::path::Path) -> String {
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
     match home.as_deref().and_then(|h| path.strip_prefix(h).ok()) {
         Some(rest) => format!("~/{}", rest.display()),
         None => path.display().to_string(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::use_tiles;
-
-    #[test]
-    fn tiles_are_only_used_on_an_opaque_tab_without_a_backdrop() {
-        assert!(use_tiles(true, false, 1.0));
-        assert!(!use_tiles(true, true, 1.0));
-        assert!(!use_tiles(true, false, 0.8));
-        assert!(!use_tiles(false, false, 1.0));
     }
 }

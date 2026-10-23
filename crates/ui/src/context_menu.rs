@@ -549,7 +549,11 @@ pub fn overlay<'a>(
     window: Size,
     look: Look,
 ) -> Element<'a, Message> {
-    let Some(menu) = menu else { return base };
+    // Wrapped even when closed, so `base` keeps its depth in the widget tree: a new parent
+    // would rebuild its state (the tab strip would scroll back to the start).
+    let Some(menu) = menu else {
+        return stack![base].into();
+    };
     let at = menu.position(window);
     let click_away = mouse_area(space().width(Length::Fill).height(Length::Fill))
         .on_press(Message::CloseMenu)

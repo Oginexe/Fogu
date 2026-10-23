@@ -65,10 +65,14 @@ pub fn page<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Element<'a, Message> {
         .max_width(MAX_W)
         .padding([26, 32]);
     let bg = look.base;
-    let content = container(scrollable(body).style(crate::style::scrollbar))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(move |_theme: &iced::Theme| container::background(bg));
+    let content = container(
+        scrollable(body)
+            .direction(crate::style::thin())
+            .style(crate::style::scrollbar),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .style(move |_theme: &iced::Theme| container::background(bg));
     let edge = look.border;
     let rule = container(space())
         .width(1)
@@ -268,10 +272,24 @@ fn appearance<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Form<'a> {
                 forms::toggle(look, FieldId::CursorBlink, "Blink", a.cursor_blink),
             ]
         ),
+        window(look, a.rounded_corners),
         forms::section(look, "Transparency", glass),
     ]
     .spacing(12)
     .into()
+}
+
+/// The "Window" section: the tiles' rounded corners.
+fn window<'a>(look: Look, rounded: bool) -> Form<'a> {
+    forms::section(
+        look,
+        "Window",
+        vec![forms::note(
+            forms::toggle(look, FieldId::RoundedCorners, "Rounded corners", rounded),
+            "Panes, side panels and pages as rounded tiles.",
+            look.dim,
+        )],
+    )
 }
 
 fn percent(v: f32) -> String {

@@ -23,7 +23,7 @@ const AUTOSCROLL_EVERY: Duration = Duration::from_millis(50);
 /// (`Config.terminal.{wheel_lines,paste_on_middle_click}`).
 #[derive(Clone, Copy, Debug)]
 pub struct MouseConfig {
-    /// Scrollback lines per wheel notch.
+    /// Scrollback lines per wheel notch (and per line-height of trackpad travel).
     pub wheel_lines: u32,
     /// Middle-click pastes from PRIMARY.
     pub paste_on_middle_click: bool,
@@ -99,6 +99,10 @@ pub struct MouseState {
     report_cell: Option<(usize, usize)>,
     /// Fractional wheel notches not yet reported / sent as arrow keys.
     report_wheel: f32,
+    /// Scrollbar drag: where the thumb was grabbed, and the history offset last asked for.
+    pub(crate) bar_drag: Option<(f32, usize)>,
+    /// The pointer is over the scrollbar's strip.
+    pub(crate) bar_hot: bool,
 }
 
 impl MouseState {
@@ -215,7 +219,8 @@ impl MouseState {
     fn wheel(&mut self, delta: ScrollDelta, grid: &Grid, shell: &mut Shell<'_, Message>) {
         self.wheel_lines += match delta {
             ScrollDelta::Lines { y, .. } => y * wheel_lines(grid),
-            ScrollDelta::Pixels { y, .. } => y / grid.metrics.cell_h,
+            // A line-height of trackpad travel counts as a notch, so `wheel_lines` speeds both.
+            ScrollDelta::Pixels { y, .. } => y / grid.metrics.cell_h * wheel_lines(grid),
         };
         if !self.wheel_lines.is_finite() {
             self.wheel_lines = 0.0;
@@ -355,7 +360,7 @@ impl MouseState {
         }
         self.report_wheel += match delta {
             ScrollDelta::Lines { y, .. } => y,
-            ScrollDelta::Pixels { y, .. } => y / (grid.metrics.cell_h * wheel_lines(grid)),
+            ScrollDelta::Pixels { y, .. } => y / grid.metrics.cell_h,
         };
         if !self.report_wheel.is_finite() {
             self.report_wheel = 0.0;

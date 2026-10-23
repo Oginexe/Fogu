@@ -8,7 +8,7 @@ use iced::{Point, Rectangle, Task};
 use crate::app::App;
 use crate::message::Message;
 use crate::tab::{PaneId, TabId};
-use crate::tab_bar::{BAR_H, STRIP_PAD, TAB_STRIDE};
+use crate::tab_bar::{BAR_H, STRIP_PAD, TAB_GAP};
 
 /// Pixels the pointer moves before a press becomes a drag.
 const THRESHOLD: f32 = 6.0;
@@ -116,8 +116,8 @@ pub fn drop_zone(at: Point, rect: Rectangle) -> Zone {
     clippy::cast_sign_loss,
     reason = "rounded and clamped to 0..=count first"
 )]
-pub fn insertion_index(x: f32, count: usize) -> usize {
-    let slot = (x / TAB_STRIDE).round().max(0.0) as usize;
+pub fn insertion_index(x: f32, count: usize, tab_w: f32) -> usize {
+    let slot = (x / (tab_w + TAB_GAP)).round().max(0.0) as usize;
     slot.min(count)
 }
 
@@ -127,8 +127,8 @@ pub fn insertion_index(x: f32, count: usize) -> usize {
     clippy::cast_sign_loss,
     reason = "floored and non-negative"
 )]
-fn header_at(x: f32) -> usize {
-    (x / TAB_STRIDE).floor().max(0.0) as usize
+fn header_at(x: f32, tab_w: f32) -> usize {
+    (x / (tab_w + TAB_GAP)).floor().max(0.0) as usize
 }
 
 /// Converts a window pointer into the tab strip's scrolled content coordinate.
@@ -182,7 +182,7 @@ impl App {
             drag.target = None;
         }
         // Over a header: show that tab, so the drop can land on its panes.
-        let hovered = self.tabs.get(header_at(x)).map(|t| t.id);
+        let hovered = self.tabs.get(header_at(x, self.tab_w())).map(|t| t.id);
         if let Some(tab) = hovered.filter(|t| *t != self.active) {
             self.activate(tab);
         }
@@ -202,7 +202,7 @@ impl App {
             if let Payload::Tab(tab) = drag.payload
                 && let Some(x) = self.tab_strip_position(drag.at)
             {
-                self.reorder_tab(tab, insertion_index(x, self.tabs.len()));
+                self.reorder_tab(tab, insertion_index(x, self.tabs.len(), self.tab_w()));
             }
             return Task::none();
         }
@@ -215,19 +215,15 @@ impl App {
     /// The pointer's horizontal coordinate in the strip's content, when it is inside the
     /// visible strip rather than over `+` or the controls to its right.
     fn tab_strip_position(&self, at: Point) -> Option<f32> {
-        let toggles = self.active_tab().map_or(2, |tab| {
-            2 + usize::from(tab.panes.values().any(crate::tab::Pane::is_ssh))
-                + usize::from(tab.panes.values().any(|pane| pane.sftp.is_some()))
-        });
         let left = self.bar_inset() + STRIP_PAD;
         let width = crate::tab_bar::strip_width(
             self.window_size.width,
             self.bar_inset(),
-            toggles,
+            self.bar_toggles(),
             self.tabs.len(),
         );
         let viewport = Rectangle::new(Point::new(left, 0.0), iced::Size::new(width, BAR_H));
-        let content_width = crate::tab_bar::headers_width(self.tabs.len());
+        let content_width = crate::tab_bar::headers_width(self.tabs.len(), self.tab_w());
         let offset = self
             .tab_strip
             .filter(|known| {
@@ -236,6 +232,24 @@ impl App {
             })
             .map_or(0.0, |known| known.absolute_offset().x);
         strip_position(at, viewport, offset)
+    }
+
+    /// The panel toggles the bar shows for the active tab (as `TabBar::view` counts them).
+    fn bar_toggles(&self) -> usize {
+        self.active_tab().map_or(2, |tab| {
+            2 + usize::from(tab.panes.values().any(crate::tab::Pane::is_ssh))
+                + usize::from(tab.panes.values().any(|pane| pane.sftp.is_some()))
+        })
+    }
+
+    /// The headers' current width.
+    pub(crate) fn tab_w(&self) -> f32 {
+        crate::tab_bar::tab_w(
+            self.window_size.width,
+            self.bar_inset(),
+            self.bar_toggles(),
+            self.tabs.len(),
+        )
     }
 
     /// Moves tab `id` to the gap `slot` (an index into the bar before the move).
