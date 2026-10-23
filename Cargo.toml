@@ -119,6 +119,14 @@ panic = "unwind"
 strip = "symbols"
 debug = false
 
+# The terminal engine stays at 3: "s" cost it ~10% of feed throughput.
+[profile.release.package.alacritty_terminal]
+opt-level = 3
+[profile.release.package.vte]
+opt-level = 3
+[profile.release.package.fogu-term]
+opt-level = 3
+
 [profile.release-dev]
 inherits = "release"
 lto = "thin"
