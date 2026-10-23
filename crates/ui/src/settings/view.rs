@@ -272,10 +272,24 @@ fn appearance<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Form<'a> {
                 forms::toggle(look, FieldId::CursorBlink, "Blink", a.cursor_blink),
             ]
         ),
+        window(look, a.rounded_corners),
         forms::section(look, "Transparency", glass),
     ]
     .spacing(12)
     .into()
+}
+
+/// The "Window" section: the tiles' rounded corners.
+fn window<'a>(look: Look, rounded: bool) -> Form<'a> {
+    forms::section(
+        look,
+        "Window",
+        vec![forms::note(
+            forms::toggle(look, FieldId::RoundedCorners, "Rounded corners", rounded),
+            "Panes, side panels and pages as rounded tiles.",
+            look.dim,
+        )],
+    )
 }
 
 fn percent(v: f32) -> String {

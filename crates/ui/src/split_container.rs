@@ -20,9 +20,11 @@ use crate::tab::{PaneId, TabId};
 
 /// Space between sibling panes; the divider line sits in its middle.
 pub const GAP: f32 = 4.0;
-/// Tiles: the space between and around them, and their corner radius.
+/// Tiles: the space between them, and their corner radius.
 const TILE_GAP: f32 = 6.0;
 const TILE_R: f32 = 10.0;
+/// Tiles: the margin between them and the window's edge.
+pub const TILE_EDGE: f32 = 2.0;
 /// Width of a divider's invisible mouse hit area.
 const HIT: f32 = 8.0;
 /// Room kept around the panes for the focused pane's border.
@@ -122,7 +124,7 @@ impl<'a> SplitContainer<'a> {
     /// The area the panes share: `bounds` minus room for the border (tiles: their margin).
     fn inner(&self, bounds: Rectangle) -> Rect {
         let pad = if self.tiles.is_some() {
-            TILE_GAP
+            TILE_EDGE
         } else {
             BORDER
         };
@@ -284,6 +286,20 @@ impl<'a> SplitContainer<'a> {
         splits.chain(side.map(|(_, d)| Drag::Side(d))).collect()
     }
 
+    /// Ground only around and between the tiles (the side panel's tile in it too): on a
+    /// see-through window, overlapping fills would stack their alpha.
+    fn draw_ground(&self, renderer: &mut iced::Renderer, bounds: Rectangle, ground: Color) {
+        for strip in frame(bounds, rectangle(self.inner(bounds))) {
+            fill(renderer, strip, ground);
+        }
+        for drag in self.dividers(bounds) {
+            fill(renderer, rectangle(drag.divider().rect), ground);
+        }
+        if let Some((side, _)) = self.areas(bounds).1 {
+            fill_tile(renderer, rectangle(side), ground);
+        }
+    }
+
     fn divider_at(&self, bounds: Rectangle, at: Point) -> Option<Drag> {
         self.dividers(bounds)
             .into_iter()
@@ -309,7 +325,7 @@ fn draw_tiles(
     ground: Color,
     ring: Color,
     border: Option<(PaneId, Color)>,
-    tiles: &[(PaneId, Rectangle)],
+    tiles: &[(Option<PaneId>, Rectangle)],
 ) {
     use iced::advanced::image::{self, Renderer as _};
     let notches = [
@@ -351,7 +367,7 @@ fn draw_tiles(
     renderer::Renderer::with_layer(renderer, all, |renderer| {
         for &(id, bounds) in tiles {
             let color = match border {
-                Some((pane, color)) if pane == id => color,
+                Some((pane, color)) if Some(pane) == id => color,
                 _ => ring,
             };
             let quad = Quad {
@@ -362,6 +378,60 @@ fn draw_tiles(
             renderer::Renderer::fill_quad(renderer, quad, Color::TRANSPARENT);
         }
     });
+}
+
+/// Rounds the corners of what lies under it (stacked over a page): the tiles' ground-coloured
+/// notches and ring. It takes no events.
+#[derive(Debug)]
+pub struct Corners {
+    ground: Color,
+    ring: Color,
+}
+
+impl Corners {
+    pub fn new(ground: Color, ring: Color) -> Self {
+        Self { ground, ring }
+    }
+}
+
+impl Widget<Message, iced::Theme, iced::Renderer> for Corners {
+    fn size(&self) -> Size<Length> {
+        Size::new(Length::Fill, Length::Fill)
+    }
+
+    fn layout(
+        &mut self,
+        _tree: &mut Tree,
+        _renderer: &iced::Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        layout::Node::new(limits.max())
+    }
+
+    fn draw(
+        &self,
+        _tree: &Tree,
+        renderer: &mut iced::Renderer,
+        _theme: &iced::Theme,
+        _style: &renderer::Style,
+        layout: Layout<'_>,
+        _cursor: mouse::Cursor,
+        _viewport: &Rectangle,
+    ) {
+        draw_tiles(
+            renderer,
+            self.ground,
+            self.ring,
+            None,
+            &[(None, layout.bounds())],
+        );
+    }
+}
+
+impl From<Corners> for Element<'_, Message> {
+    fn from(corners: Corners) -> Self {
+        Element::new(corners)
+    }
 }
 
 fn rectangle(r: Rect) -> Rectangle {
@@ -399,6 +469,45 @@ fn resize_cursor(dir: Orientation) -> mouse::Interaction {
         Orientation::Horizontal => mouse::Interaction::ResizingHorizontally,
         Orientation::Vertical => mouse::Interaction::ResizingVertically,
     }
+}
+
+/// A tile's rounded fill.
+fn fill_tile(renderer: &mut iced::Renderer, bounds: Rectangle, color: Color) {
+    let quad = Quad {
+        bounds,
+        border: Border::default().rounded(TILE_R),
+        ..Quad::default()
+    };
+    renderer::Renderer::fill_quad(renderer, quad, color);
+}
+
+/// The four strips of `outer` around `inner`.
+fn frame(outer: Rectangle, inner: Rectangle) -> [Rectangle; 4] {
+    let bottom = inner.y + inner.height;
+    let right = inner.x + inner.width;
+    [
+        Rectangle {
+            height: inner.y - outer.y,
+            ..outer
+        },
+        Rectangle {
+            y: bottom,
+            height: outer.y + outer.height - bottom,
+            ..outer
+        },
+        Rectangle {
+            y: inner.y,
+            width: inner.x - outer.x,
+            height: inner.height,
+            ..outer
+        },
+        Rectangle {
+            x: right,
+            y: inner.y,
+            width: outer.x + outer.width - right,
+            height: inner.height,
+        },
+    ]
 }
 
 fn fill(renderer: &mut iced::Renderer, bounds: Rectangle, color: Color) {
@@ -579,9 +688,10 @@ impl Widget<Message, iced::Theme, iced::Renderer> for SplitContainer<'_> {
         let panes = || self.ids.iter().zip(layout.children());
         match self.tiles {
             Some((ground, _, glow)) => {
-                fill(renderer, bounds, ground);
-                // The focused tile's glow, under the tiles.
+                self.draw_ground(renderer, bounds, ground);
+                // The focused tile's glow, under the tiles (opaque only: it would show through).
                 if let Some((pane, _)) = self.border
+                    && self.background.a >= 1.0
                     && let Some((_, l)) = panes().find(|(id, _)| **id == pane)
                 {
                     let quad = Quad {
@@ -597,7 +707,8 @@ impl Widget<Message, iced::Theme, iced::Renderer> for SplitContainer<'_> {
                     renderer::Renderer::fill_quad(renderer, quad, self.background);
                 }
                 for (_, l) in panes() {
-                    fill(renderer, l.bounds(), self.background);
+                    // Rounded, so the notches drawn later sit on bare ground.
+                    fill_tile(renderer, l.bounds(), self.background);
                 }
             }
             None => fill(renderer, bounds, self.background),
@@ -633,8 +744,12 @@ impl Widget<Message, iced::Theme, iced::Renderer> for SplitContainer<'_> {
                 );
             }
             if let Some((ground, ring, _)) = self.tiles {
-                let tiles: Vec<(PaneId, Rectangle)> =
-                    panes().map(|(id, l)| (*id, l.bounds())).collect();
+                // The side panel (the last child) is a tile too.
+                let side = self.side.and_then(|_| layout.children().last());
+                let tiles: Vec<(Option<PaneId>, Rectangle)> = panes()
+                    .map(|(id, l)| (Some(*id), l.bounds()))
+                    .chain(side.map(|l| (None, l.bounds())))
+                    .collect();
                 draw_tiles(renderer, ground, ring, self.border, &tiles);
                 return;
             }

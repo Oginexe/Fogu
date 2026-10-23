@@ -77,6 +77,10 @@ pub enum RightClickAction {
 /// placement exists.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent on/off settings, each a key in config.toml"
+)]
 pub struct Appearance {
     /// Terminal font family; `"monospace"` resolves to the system monospace font.
     pub font_family: String,
@@ -102,6 +106,8 @@ pub struct Appearance {
     /// Blurs the desktop behind a transparent window (KDE and macOS; ignored elsewhere). Read
     /// when the window is created.
     pub window_blur: bool,
+    /// Panes and side panels as rounded tiles; off: square, edge to edge.
+    pub rounded_corners: bool,
     /// Show the generated "Default shell" + `/etc/shells` profiles (profile sidebar and picker).
     pub show_builtin_profiles: bool,
     /// How many recently opened profiles the sidebar's "Recent" section shows (0 hides it).
@@ -126,6 +132,7 @@ impl Default for Appearance {
             terminal_bg_alpha: None,
             window_opacity: 1.0,
             window_blur: false,
+            rounded_corners: true,
             show_builtin_profiles: true,
             recent_profiles: 3,
             profiles_sidebar_width: 280.0,

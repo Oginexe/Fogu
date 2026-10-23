@@ -37,25 +37,48 @@ pub(crate) fn with_sidebar<'a>(
     config: &Config,
     live: &HashSet<ProfileId>,
     look: Look,
+    tile_ground: Option<iced::Color>,
 ) -> Element<'a, Message> {
     if !view.open {
         return body;
     }
-    let (edge, bg) = (look.border, look.bg);
-    // A 1 px divider, the rest of the grab area in the panel's colour.
-    let handle = mouse_area(row![
-        container(space())
-            .width(1)
-            .height(Length::Fill)
-            .style(move |_theme: &iced::Theme| container::background(edge)),
-        container(space())
-            .width(HANDLE_W - 1.0)
-            .height(Length::Fill)
-            .style(move |_theme: &iced::Theme| container::background(bg)),
-    ])
-    .interaction(mouse::Interaction::ResizingHorizontally)
-    .on_press(msg(ProfilesMsg::ResizeStart));
-    let all = row![body, handle, sidebar(view, config, live, look)];
+    let panel = sidebar(view, config, live, look, tile_ground.is_some());
+    // Tiles: the grab area is ground, and the panel keeps the panes' 2 px edge margin.
+    let (handle, panel): (Element<'a, Message>, Element<'a, Message>) =
+        if let Some(ground) = tile_ground {
+            let ground_bg = move |_theme: &iced::Theme| container::background(ground);
+            let handle = container(space())
+                .width(HANDLE_W)
+                .height(Length::Fill)
+                .style(ground_bg);
+            let panel = container(panel)
+                .padding(iced::Padding {
+                    top: 2.0,
+                    right: 2.0,
+                    bottom: 2.0,
+                    left: 0.0,
+                })
+                .style(ground_bg);
+            (handle.into(), panel.into())
+        } else {
+            // A 1 px divider, the rest of the grab area in the panel's colour.
+            let (edge, bg) = (look.border, look.bg);
+            let handle = row![
+                container(space())
+                    .width(1)
+                    .height(Length::Fill)
+                    .style(move |_theme: &iced::Theme| container::background(edge)),
+                container(space())
+                    .width(HANDLE_W - 1.0)
+                    .height(Length::Fill)
+                    .style(move |_theme: &iced::Theme| container::background(bg)),
+            ];
+            (handle.into(), panel)
+        };
+    let handle = mouse_area(handle)
+        .interaction(mouse::Interaction::ResizingHorizontally)
+        .on_press(msg(ProfilesMsg::ResizeStart));
+    let all = row![body, handle, panel];
     if !view.resizing {
         return all.into();
     }
@@ -160,6 +183,7 @@ fn sidebar<'a>(
     config: &Config,
     live: &HashSet<ProfileId>,
     look: Look,
+    rounded: bool,
 ) -> Element<'a, Message> {
     let all = entries(
         config,
@@ -270,10 +294,21 @@ fn sidebar<'a>(
         .height(Length::Fill);
     let body = column![top, list].spacing(10).padding([12, 12]);
     let bg = look.bg;
+    let ring = if look.dark { t::N900 } else { look.border };
     let panel = container(body)
         .width(view.width)
         .height(Length::Fill)
-        .style(move |_theme: &iced::Theme| container::background(bg));
+        .style(move |_theme: &iced::Theme| container::Style {
+            border: if rounded {
+                iced::Border::default()
+                    .rounded(t::R_PANE)
+                    .width(1)
+                    .color(ring)
+            } else {
+                iced::Border::default()
+            },
+            ..container::background(bg)
+        });
     mouse_area(panel)
         .on_enter(msg(ProfilesMsg::Hover(true)))
         .on_exit(msg(ProfilesMsg::Hover(false)))

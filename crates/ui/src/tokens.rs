@@ -64,7 +64,11 @@ pub fn shadow_lg() -> iced::Shadow {
     }
 }
 
-/// The ring that goes with [`shadow_lg`].
-pub fn ring_lg(radius: f32) -> iced::Border {
-    iced::Border::default().rounded(radius).width(1).color(N500)
+/// The ring that goes with [`shadow_lg`]: a step off the surface, never a bright line.
+pub fn ring_lg(radius: f32, dark: bool) -> iced::Border {
+    let color = if dark { N800 } else { N300 };
+    iced::Border::default()
+        .rounded(radius)
+        .width(1)
+        .color(color)
 }
