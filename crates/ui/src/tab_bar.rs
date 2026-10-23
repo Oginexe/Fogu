@@ -20,12 +20,20 @@ use crate::palette::Look;
 use crate::tab::{Tab, TabId};
 use crate::tokens::{self as t, alpha};
 
-/// Header slot width in logical px (the active header's flares included).
-/// shortcut: one width for every header (the design flexes 110–220), as the drag targets assume
-/// a fixed stride.
+/// Header slot width in logical px while the headers fit (the active header's flares included).
+/// All headers share one width, so the drag targets keep a fixed stride.
 pub const TAB_W: f32 = 200.0;
-/// A header plus the 2 px between headers (drag targets in the bar).
-pub const TAB_STRIDE: f32 = TAB_W + 2.0;
+/// Narrowest header, still showing the dot and a few title characters; past it the strip
+/// scrolls.
+pub const MIN_TAB_W: f32 = 120.0;
+/// Space between headers.
+pub const TAB_GAP: f32 = 2.0;
+/// What a header takes besides its title: paddings, the dot, the close button.
+const HEADER_CHROME_W: f32 = 70.0;
+/// Empty bar always left after the headers' buttons, to grab and move the window.
+const GRAB_W: f32 = 96.0;
+/// Rough advance of a title character at [`TITLE_SIZE`].
+const TITLE_CHAR_W: f32 = 6.5;
 /// Height of the bar (it is the window's title bar).
 pub const BAR_H: f32 = 40.0;
 /// Room between the bar's left end (after [`TRAFFIC_LIGHTS_W`]) and the first header.
@@ -50,17 +58,31 @@ pub const RENAME_INPUT: &str = "fogu-rename-input";
 /// Id of the scrollable tab strip.
 pub const TAB_STRIP: &str = "fogu-tab-strip";
 
-/// Total width of `count` fixed-width headers and their gaps.
-pub(crate) fn headers_width(count: usize) -> f32 {
+/// Total width of `count` headers `tab_w` wide and their gaps.
+pub(crate) fn headers_width(count: usize, tab_w: f32) -> f32 {
     if count == 0 {
         0.0
     } else {
-        crate::metrics::cells_f32(count) * TAB_STRIDE - 2.0
+        crate::metrics::cells_f32(count) * (tab_w + TAB_GAP) - TAB_GAP
     }
+}
+
+/// Header width for `tabs` headers: [`TAB_W`] while they fit, then shrunk evenly to fill the
+/// room, down to [`MIN_TAB_W`].
+pub(crate) fn tab_w(width: f32, inset: f32, toggles: usize, tabs: usize) -> f32 {
+    let even = (strip_room(width, inset, toggles) + TAB_GAP)
+        / crate::metrics::cells_f32(tabs.max(1))
+        - TAB_GAP;
+    even.floor().clamp(MIN_TAB_W, TAB_W)
 }
 
 /// Width available to the scrollable headers after the bar's fixed controls.
 pub(crate) fn strip_width(width: f32, inset: f32, toggles: usize, tabs: usize) -> f32 {
+    headers_width(tabs, tab_w(width, inset, toggles, tabs)).min(strip_room(width, inset, toggles))
+}
+
+/// The bar's width minus its fixed controls.
+fn strip_room(width: f32, inset: f32, toggles: usize) -> f32 {
     let window_buttons = if cfg!(target_os = "macos") {
         6.0
     } else {
@@ -73,8 +95,9 @@ pub(crate) fn strip_width(width: f32, inset: f32, toggles: usize, tabs: usize) -
         + 22.0
         + crate::metrics::cells_f32(toggles) * 32.0
         + 2.0
+        + GRAB_W
         + window_buttons;
-    headers_width(tabs).min((width - others).max(0.0))
+    (width - others).max(0.0)
 }
 
 /// An inline rename in progress.
@@ -107,12 +130,24 @@ pub struct TabBar<'a> {
     pub width: f32,
 }
 
-/// `title` cut to [`MAX_TITLE_CHARS`] characters, ending in `…` when cut.
-pub fn truncate(title: &str) -> String {
-    if title.chars().count() <= MAX_TITLE_CHARS {
+/// How many title characters a `tab_w`-wide header shows.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "floored and clamped to 3..=MAX_TITLE_CHARS first"
+)]
+fn title_chars(tab_w: f32) -> usize {
+    ((tab_w - HEADER_CHROME_W) / TITLE_CHAR_W)
+        .floor()
+        .clamp(3.0, crate::metrics::cells_f32(MAX_TITLE_CHARS)) as usize
+}
+
+/// `title` cut to `max` characters (at least 1), ending in `…` when cut.
+pub fn truncate(title: &str, max: usize) -> String {
+    if title.chars().count() <= max {
         return title.to_owned();
     }
-    let mut out: String = title.chars().take(MAX_TITLE_CHARS - 1).collect();
+    let mut out: String = title.chars().take(max.max(1) - 1).collect();
     out.push('…');
     out
 }
@@ -127,7 +162,7 @@ fn solid<'a>(color: Color, width: Length, height: f32) -> Element<'a, Message> {
 
 impl<'a> TabBar<'a> {
     #[expect(clippy::too_many_lines, reason = "one widget tree, top to bottom")]
-    fn header(&self, tab: &'a Tab) -> Element<'a, Message> {
+    fn header(&self, tab: &'a Tab, tab_w: f32) -> Element<'a, Message> {
         let look = self.look;
         let active = tab.id == self.active;
         let hovered = self.hovered == Some(tab.id);
@@ -143,7 +178,7 @@ impl<'a> TabBar<'a> {
                 .size(TITLE_SIZE)
                 .padding(2)
                 .into(),
-            _ => text(truncate(tab.title()))
+            _ => text(truncate(tab.title(), title_chars(tab_w)))
                 .size(TITLE_SIZE)
                 .color(fg)
                 .wrapping(text::Wrapping::None)
@@ -200,7 +235,7 @@ impl<'a> TabBar<'a> {
                 });
             row![flare(ground, true), face, flare(ground, false)]
                 .align_y(Alignment::End)
-                .width(TAB_W)
+                .width(tab_w)
                 .height(BAR_H)
                 .into()
         } else {
@@ -227,7 +262,7 @@ impl<'a> TabBar<'a> {
                     bottom: PILL_LIFT,
                     left: 4.0,
                 })
-                .width(TAB_W)
+                .width(tab_w)
                 .height(BAR_H)
                 .align_y(Alignment::End)
                 .into()
@@ -256,7 +291,10 @@ impl<'a> TabBar<'a> {
             look,
             Message::Action(Action::OpenProfilePicker),
         );
-        let headers = Row::with_children(self.tabs.iter().map(|tab| self.header(tab))).spacing(2);
+        let toggles = usize::from(self.forwards.is_some()) + usize::from(self.sftp.is_some()) + 2;
+        let tab_w = tab_w(self.width, self.inset, toggles, self.tabs.len());
+        let headers = Row::with_children(self.tabs.iter().map(|tab| self.header(tab, tab_w)))
+            .spacing(TAB_GAP);
         let scroller = Scrollbar::new().width(2).scroller_width(2);
         let strip = scrollable(headers)
             .id(Id::new(TAB_STRIP))
@@ -266,7 +304,6 @@ impl<'a> TabBar<'a> {
         // As wide as the headers when they fit (so `+` follows the last one), else whatever the
         // bar leaves after `+` and the buttons. Computed, as a `Fill` child of a row is never
         // narrower than its share (iced 0.14), whatever its `max_width`.
-        let toggles = usize::from(self.forwards.is_some()) + usize::from(self.sftp.is_some()) + 2;
         let strip = container(strip).width(strip_width(
             self.width,
             self.inset,
@@ -547,14 +584,35 @@ mod tests {
 
     #[test]
     fn truncates_long_titles_with_ellipsis() {
-        assert_eq!(truncate("zsh"), "zsh");
+        assert_eq!(truncate("zsh", MAX_TITLE_CHARS), "zsh");
         let long = "a".repeat(40);
-        let cut = truncate(&long);
+        let cut = truncate(&long, MAX_TITLE_CHARS);
         assert_eq!(cut.chars().count(), MAX_TITLE_CHARS);
         assert!(cut.ends_with('…'));
         assert_eq!(
-            truncate(&"é".repeat(MAX_TITLE_CHARS)).chars().count(),
+            truncate(&"é".repeat(MAX_TITLE_CHARS), MAX_TITLE_CHARS)
+                .chars()
+                .count(),
             MAX_TITLE_CHARS
         );
+    }
+
+    #[test]
+    fn headers_shrink_to_fit_then_scroll() {
+        let room = |tabs| {
+            strip_room(1400.0, 0.0, 2) + TAB_GAP
+                - headers_width(tabs, tab_w(1400.0, 0.0, 2, tabs))
+                - TAB_GAP
+        };
+        // Few tabs: full width, the strip shorter than the room.
+        assert!((tab_w(1400.0, 0.0, 2, 2) - TAB_W).abs() < f32::EPSILON);
+        // More: narrower, all of them still in the room.
+        let w = tab_w(1400.0, 0.0, 2, 8);
+        assert!(w < TAB_W && w > MIN_TAB_W && room(8) >= 0.0, "{w}");
+        assert!((strip_width(1400.0, 0.0, 2, 8) - headers_width(8, w)).abs() < f32::EPSILON);
+        // Too many: the floor, and the strip scrolls (headers wider than the room).
+        assert!((tab_w(1400.0, 0.0, 2, 40) - MIN_TAB_W).abs() < f32::EPSILON);
+        assert!(room(40) < 0.0);
+        assert!(title_chars(MIN_TAB_W) >= 3 && title_chars(TAB_W) == MAX_TITLE_CHARS);
     }
 }

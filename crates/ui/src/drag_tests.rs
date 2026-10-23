@@ -26,20 +26,20 @@ fn drop_zones_are_the_nearest_quarter_edge_else_the_centre() {
 
 #[test]
 fn insertion_index_picks_the_nearest_gap() {
-    let s = TAB_STRIDE;
-    assert_eq!(insertion_index(-30.0, 3), 0);
-    assert_eq!(insertion_index(s * 0.4, 3), 0);
-    assert_eq!(insertion_index(s * 0.6, 3), 1);
-    assert_eq!(insertion_index(s * 2.5 + 1.0, 3), 3);
-    assert_eq!(insertion_index(s * 10.0, 3), 3);
+    let (w, s) = (150.0, 150.0 + TAB_GAP);
+    assert_eq!(insertion_index(-30.0, 3, w), 0);
+    assert_eq!(insertion_index(s * 0.4, 3, w), 0);
+    assert_eq!(insertion_index(s * 0.6, 3, w), 1);
+    assert_eq!(insertion_index(s * 2.5 + 1.0, 3, w), 3);
+    assert_eq!(insertion_index(s * 10.0, 3, w), 3);
 }
 
 #[test]
 fn strip_geometry_applies_scroll_and_rejects_controls() {
     let viewport = Rectangle::new(Point::new(20.0, 0.0), iced::Size::new(300.0, BAR_H));
     assert_eq!(
-        strip_position(Point::new(70.0, 10.0), viewport, TAB_STRIDE),
-        Some(TAB_STRIDE + 50.0)
+        strip_position(Point::new(70.0, 10.0), viewport, 200.0),
+        Some(250.0)
     );
     assert_eq!(strip_position(Point::new(19.0, 10.0), viewport, 0.0), None);
     assert_eq!(
@@ -155,7 +155,7 @@ fn a_short_press_is_not_a_drag_and_tabs_reorder_in_the_bar() {
     let _ = app.update(Message::Drag(DragMsg::Start(Payload::Tab(first))));
     let _ = app.update(Message::Drag(DragMsg::Move(Point::new(50.0, 10.0))));
     let _ = app.update(Message::Drag(DragMsg::Move(Point::new(
-        TAB_STRIDE * 3.0,
+        (app.tab_w() + TAB_GAP) * 3.0,
         10.0,
     ))));
     let _ = app.update(Message::Drag(DragMsg::Release));
