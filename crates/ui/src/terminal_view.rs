@@ -5,7 +5,7 @@
 //! `x = col * cell_w`, never at the shaped advance.
 
 use fogu_core::Hotkeys;
-use fogu_term::{CellFlags, CursorShape, RenderSnapshot, Rgb, links};
+use fogu_term::{CellFlags, CursorShape, RenderSnapshot, Rgb, Scroll, links};
 use iced::advanced::input_method::{self, InputMethod};
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer::{self, Quad};
@@ -20,12 +20,17 @@ use iced::{
 use crate::keys;
 use crate::message::Message;
 use crate::metrics::{
-    CellMetrics, cells_f32 as cells, grid_cell, grid_origin, grid_room, grid_size,
+    CellMetrics, GRID_PAD, cells_f32 as cells, grid_cell, grid_origin, grid_room, grid_size,
 };
 use crate::mouse::{Grid, MouseConfig, MouseState};
 use crate::palette::{Colors, to_iced};
 use crate::runs::{Style, Underline, cell_style, explicit_bg, row_runs};
 use crate::tab::PaneId;
+
+/// The scrollbar's strip at the right edge: the grid's right padding, so it never covers a cell.
+const BAR_W: f32 = GRID_PAD.x;
+/// Shortest thumb, so a long history still leaves something to grab.
+const THUMB_MIN: f32 = 24.0;
 
 /// The terminal widget. Borrowed from the pane for one `view`.
 #[derive(Debug)]
@@ -322,25 +327,125 @@ impl<'a> TerminalView<'a> {
         }
     }
 
-    /// A 2 px bar at the right edge showing the viewport's place in history; only drawn while
-    /// scrolled back.
-    fn draw_scroll_indicator(&self, renderer: &mut iced::Renderer, bounds: Rectangle) {
+    /// The scrollbar thumb, strip-wide, when there is history to scroll.
+    fn thumb(&self, bounds: Rectangle) -> Option<Rectangle> {
         let snap = self.snapshot;
-        if snap.display_offset == 0 {
+        if snap.history_len == 0 {
+            return None;
+        }
+        let (top, height) = thumb_span(
+            snap.history_len,
+            snap.rows,
+            snap.display_offset,
+            bounds.height,
+        );
+        Some(Rectangle {
+            x: bounds.x + bounds.width - BAR_W,
+            y: bounds.y + top,
+            width: BAR_W,
+            height,
+        })
+    }
+
+    /// Scrollbar press, drag and release; returns `true` when it took the event.
+    fn on_bar_event(
+        &self,
+        state: &mut MouseState,
+        event: &Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+        shell: &mut Shell<'_, Message>,
+    ) -> bool {
+        let Some(thumb) = self.thumb(bounds) else {
+            state.bar_drag = None;
+            state.bar_hot = false;
+            return false;
+        };
+        let strip = Rectangle {
+            y: bounds.y,
+            height: bounds.height,
+            ..thumb
+        };
+        let hot = cursor.is_over(strip);
+        if hot != state.bar_hot {
+            state.bar_hot = hot;
+            shell.request_redraw();
+        }
+        match event {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if hot => {
+                let y = cursor.position().map_or(thumb.y, |p| p.y);
+                // Held where pressed on the thumb; elsewhere the thumb jumps to centre on it.
+                let grab = if (thumb.y..thumb.y + thumb.height).contains(&y) {
+                    y - thumb.y
+                } else {
+                    thumb.height / 2.0
+                };
+                state.bar_drag = Some((grab, self.snapshot.display_offset));
+                self.bar_scroll(state, y, bounds, thumb.height, shell);
+                true
+            }
+            Event::Mouse(mouse::Event::CursorMoved { position }) if state.bar_drag.is_some() => {
+                self.bar_scroll(state, position.y, bounds, thumb.height, shell);
+                true
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+                if state.bar_drag.take().is_some() =>
+            {
+                shell.request_redraw();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Scrolls so the dragged thumb's top sits at `y` minus the grab point.
+    fn bar_scroll(
+        &self,
+        state: &mut MouseState,
+        y: f32,
+        bounds: Rectangle,
+        thumb_h: f32,
+        shell: &mut Shell<'_, Message>,
+    ) {
+        let Some((grab, sent)) = state.bar_drag else {
+            return;
+        };
+        let target = offset_at(
+            self.snapshot.history_len,
+            y - grab - bounds.y,
+            thumb_h,
+            bounds.height,
+        );
+        // From the offset last asked for: several moves can arrive before a new snapshot.
+        let to_i32 = |n: usize| i32::try_from(n).unwrap_or(i32::MAX);
+        let delta = to_i32(target) - to_i32(sent);
+        if delta != 0 {
+            shell.publish(Message::Scroll(Scroll::Delta(delta)));
+            state.bar_drag = Some((grab, target));
+        }
+    }
+
+    /// The scrollbar: a thin pill in the right padding, shown while scrolled back or under the
+    /// pointer, a little wider while hovered or dragged.
+    fn draw_scrollbar(&self, renderer: &mut iced::Renderer, bounds: Rectangle, state: &MouseState) {
+        let Some(thumb) = self.thumb(bounds) else {
+            return;
+        };
+        let active = state.bar_hot || state.bar_drag.is_some();
+        if !active && self.snapshot.display_offset == 0 {
             return;
         }
-        let total = cells(snap.history_len + snap.rows).max(1.0);
-        let top = cells(snap.history_len.saturating_sub(snap.display_offset)) / total;
-        let height = (cells(snap.rows) / total * bounds.height).max(4.0);
+        let width = if active { 5.0 } else { 3.0 };
         let mut color = to_iced(self.colors.foreground());
-        color.a = 0.5;
+        color.a = if active { 0.45 } else { 0.25 };
         let quad = Quad {
             bounds: Rectangle {
-                x: bounds.x + bounds.width - 2.0,
-                y: bounds.y + top * bounds.height,
-                width: 2.0,
-                height,
+                x: thumb.x + (BAR_W - width) / 2.0,
+                y: thumb.y + 3.0,
+                width,
+                height: (thumb.height - 6.0).max(width),
             },
+            border: Border::default().rounded(width / 2.0),
             ..Quad::default()
         };
         renderer::Renderer::fill_quad(renderer, quad, color);
@@ -473,13 +578,10 @@ impl Widget<Message, iced::Theme, iced::Renderer> for TerminalView<'_> {
         {
             shell.publish(Message::FocusPane(self.pane));
         }
-        if self.on_link_event(
-            tree.state.downcast_mut::<MouseState>(),
-            event,
-            bounds,
-            cursor,
-            shell,
-        ) {
+        let state = tree.state.downcast_mut::<MouseState>();
+        if self.on_bar_event(state, event, bounds, cursor, shell)
+            || self.on_link_event(state, event, bounds, cursor, shell)
+        {
             shell.capture_event();
             return;
         }
@@ -561,15 +663,14 @@ impl Widget<Message, iced::Theme, iced::Renderer> for TerminalView<'_> {
         _viewport: &Rectangle,
         _renderer: &iced::Renderer,
     ) -> mouse::Interaction {
-        if !cursor.is_over(layout.bounds()) {
+        let state = tree.state.downcast_ref::<MouseState>();
+        if state.bar_drag.is_some() || state.bar_hot {
+            mouse::Interaction::Idle
+        } else if !cursor.is_over(layout.bounds()) {
             mouse::Interaction::None
-        } else if tree.state.downcast_ref::<MouseState>().link.is_some() {
+        } else if state.link.is_some() {
             mouse::Interaction::Pointer
-        } else if tree
-            .state
-            .downcast_ref::<MouseState>()
-            .reporting(self.snapshot.mode)
-        {
+        } else if state.reporting(self.snapshot.mode) {
             mouse::Interaction::Idle
         } else {
             mouse::Interaction::Text
@@ -600,7 +701,7 @@ impl Widget<Message, iced::Theme, iced::Renderer> for TerminalView<'_> {
         self.draw_runs(renderer, origin, bounds);
         self.draw_selection(renderer, origin);
         self.draw_cursor(renderer, origin, bounds);
-        self.draw_scroll_indicator(renderer, bounds);
+        self.draw_scrollbar(renderer, bounds, tree.state.downcast_ref::<MouseState>());
         self.draw_overlay(renderer, bounds);
         if let Some(link) = &tree.state.downcast_ref::<MouseState>().link {
             self.draw_link(renderer, bounds, link);
@@ -608,8 +709,51 @@ impl Widget<Message, iced::Theme, iced::Renderer> for TerminalView<'_> {
     }
 }
 
+/// The scrollbar thumb's top and height on a `track`-px track, for `rows` visible lines of
+/// `history + rows`, scrolled `offset` lines back.
+fn thumb_span(history: usize, rows: usize, offset: usize, track: f32) -> (f32, f32) {
+    let height =
+        (cells(rows) / cells(history + rows).max(1.0) * track).clamp(THUMB_MIN.min(track), track);
+    let back = cells(offset.min(history)) / cells(history).max(1.0);
+    ((1.0 - back) * (track - height), height)
+}
+
+/// The history offset that puts a `thumb`-px thumb's top `top` px down a `track`-px track.
+fn offset_at(history: usize, top: f32, thumb: f32, track: f32) -> usize {
+    let down = (top / (track - thumb).max(1.0)).clamp(0.0, 1.0);
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a rounded fraction of the history length"
+    )]
+    let offset = ((1.0 - down) * cells(history)).round() as usize;
+    offset
+}
+
 impl<'a> From<TerminalView<'a>> for Element<'a, Message> {
     fn from(view: TerminalView<'a>) -> Self {
         Element::new(view)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{THUMB_MIN, offset_at, thumb_span};
+
+    #[test]
+    fn scrollbar_thumb_and_drag_agree_from_top_to_bottom() {
+        let (history, rows, track) = (976, 24, 500.0);
+        // At the bottom of history the thumb sits at the track's end; fully back, at its top.
+        let (top, height) = thumb_span(history, rows, 0, track);
+        assert!((top + height - track).abs() < 1e-3 && height >= THUMB_MIN);
+        assert!(thumb_span(history, rows, history, track).0.abs() < 1e-3);
+        // Dragging the thumb's top to a place scrolls to the offset that draws it there.
+        for offset in [0, 1, 300, 975, 976] {
+            let top = thumb_span(history, rows, offset, track).0;
+            assert_eq!(offset_at(history, top, height, track), offset);
+        }
+        // Past either end clamps.
+        assert_eq!(offset_at(history, -50.0, height, track), history);
+        assert_eq!(offset_at(history, track, height, track), 0);
     }
 }

@@ -196,6 +196,16 @@ pub(crate) fn glow(color: Color, a: f32, blur: f32) -> Shadow {
     }
 }
 
+/// A thin vertical scrollbar, to pair with [`scrollbar`].
+pub(crate) fn thin() -> scrollable::Direction {
+    scrollable::Direction::Vertical(
+        scrollable::Scrollbar::new()
+            .width(4)
+            .scroller_width(4)
+            .margin(2),
+    )
+}
+
 /// A quiet scrollbar: no rail, a thin neutral thumb that lightens under the pointer.
 pub(crate) fn scrollbar(theme: &Theme, status: scrollable::Status) -> scrollable::Style {
     let mut style = scrollable::default(theme, status);
@@ -208,7 +218,7 @@ pub(crate) fn scrollbar(theme: &Theme, status: scrollable::Status) -> scrollable
         rail.background = None;
         rail.border = Border::default();
         rail.scroller.background = Background::Color(thumb);
-        rail.scroller.border = Border::default().rounded(4);
+        rail.scroller.border = Border::default().rounded(2);
     }
     style
 }

@@ -65,10 +65,14 @@ pub fn page<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Element<'a, Message> {
         .max_width(MAX_W)
         .padding([26, 32]);
     let bg = look.base;
-    let content = container(scrollable(body).style(crate::style::scrollbar))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(move |_theme: &iced::Theme| container::background(bg));
+    let content = container(
+        scrollable(body)
+            .direction(crate::style::thin())
+            .style(crate::style::scrollbar),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .style(move |_theme: &iced::Theme| container::background(bg));
     let edge = look.border;
     let rule = container(space())
         .width(1)

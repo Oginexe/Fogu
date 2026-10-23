@@ -6,7 +6,6 @@ use std::collections::HashSet;
 
 use fogu_core::config::ProfileClick;
 use fogu_core::{Action, Config, ProfileId};
-use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{
     Id, button, column, container, mouse_area, row, scrollable, space, text, text_input,
 };
@@ -265,9 +264,8 @@ fn sidebar<'a>(
     if let Some(err) = &view.quick_error {
         top = top.push(text(err.clone()).size(11).color(look.danger));
     }
-    let scroller = Scrollbar::new().width(4).scroller_width(4);
     let list = scrollable(list)
-        .direction(Direction::Vertical(scroller))
+        .direction(crate::style::thin())
         .style(crate::style::scrollbar)
         .height(Length::Fill);
     let body = column![top, list].spacing(10).padding([12, 12]);

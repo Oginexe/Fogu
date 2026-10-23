@@ -82,6 +82,7 @@ pub fn page<'a>(
     let bg = look.base;
     let scroll = scrollable(body)
         .id(iced::widget::Id::new(PAGE_SCROLL))
+        .direction(crate::style::thin())
         .style(crate::style::scrollbar);
     let content = container(scroll)
         .width(Length::Fill)

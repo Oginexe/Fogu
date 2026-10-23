@@ -12,7 +12,6 @@ use crate::profiles::{self, Entry, Launch, Origin, now_secs};
 use crate::style::{self, Btn};
 use crate::tokens::{self as t, alpha};
 use fogu_core::ProfileKind;
-use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{
     Id, button, column, container, mouse_area, opaque, operation, rich_text, row, scrollable,
     space, span, stack, text, text_input,
@@ -432,9 +431,8 @@ pub(crate) fn overlay<'a>(
             .height(h)
             .style(move |_theme: &iced::Theme| container::background(edge))
     };
-    let scroller = Scrollbar::new().width(4).scroller_width(4);
     let list = scrollable(list.padding(6))
-        .direction(Direction::Vertical(scroller))
+        .direction(crate::style::thin())
         .style(crate::style::scrollbar)
         .width(Length::Fill)
         .height(Length::Fill);

@@ -536,7 +536,13 @@ pub(crate) fn view(pane: PaneId, state: &PromptState) -> Element<'_, Message> {
         .into(),
         None => content,
     };
-    modal::frame(scrollable(content).into(), DIALOG_W)
+    modal::frame(
+        scrollable(content)
+            .direction(crate::style::thin())
+            .style(crate::style::scrollbar)
+            .into(),
+        DIALOG_W,
+    )
 }
 
 /// The masked field of a password / passphrase prompt.

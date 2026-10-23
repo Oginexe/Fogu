@@ -299,6 +299,7 @@ pub fn view<'a>(
         title,
         scrollable(list)
             .height(Length::Shrink)
+            .direction(crate::style::thin())
             .style(crate::style::scrollbar),
         text("ADD A FORWARD").size(10.5).color(look.dim),
         form(d, stored, look),

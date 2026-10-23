@@ -99,6 +99,10 @@ pub struct MouseState {
     report_cell: Option<(usize, usize)>,
     /// Fractional wheel notches not yet reported / sent as arrow keys.
     report_wheel: f32,
+    /// Scrollbar drag: where the thumb was grabbed, and the history offset last asked for.
+    pub(crate) bar_drag: Option<(f32, usize)>,
+    /// The pointer is over the scrollbar's strip.
+    pub(crate) bar_hot: bool,
 }
 
 impl MouseState {
