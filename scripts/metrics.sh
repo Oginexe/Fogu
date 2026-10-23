@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 cargo build --release --locked -q -p fogu
-bin=target/release/fogu
+bin=${CARGO_TARGET_DIR:-target}/release/fogu
 echo "binary_bytes $(stat -c %s "$bin")"
 
 # biggest crates; `release-dev` keeps the symbols cargo-bloat needs (shares, not exact bytes)
