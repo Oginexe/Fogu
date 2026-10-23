@@ -112,6 +112,10 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
             options.mode(FILE_MODE);
         }
         let mut file = options.open(&tmp)?;
+        // shortcut: on Windows the temp file starts with the folder's inherited access list and is
+        // restricted just after `open`, before any data; another user who can open files in a
+        // shared `--config-dir` could grab a handle in between. Create it with a security
+        // descriptor (`CreateFileW`) if Fogu ever writes secrets to these files.
         #[cfg(windows)]
         crate::winsec::restrict_to_user(&tmp)?;
         file.write_all(bytes)?;

@@ -94,7 +94,7 @@ impl Cli {
 }
 
 /// `--software-render` must reach iced as `ICED_BACKEND=tiny-skia` before it starts. Setting an
-/// environment variable in-process is `unsafe` (and the workspace forbids `unsafe`), so the
+/// environment variable in-process is `unsafe` (denied outside `fogu_core::winsec`), so the
 /// process re-executes itself once with the variable set. Returns only if no re-exec was needed
 /// (or it failed, which is logged and ignored: the GPU renderer then runs as usual).
 pub fn reexec_for_software_render(cli: &Cli) {

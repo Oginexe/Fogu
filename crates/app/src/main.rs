@@ -45,9 +45,9 @@ fn main() -> fogu_ui::Result {
 
 /// Release builds: no core dumps because SSH secrets will live in memory. On Linux
 /// `PR_SET_DUMPABLE=0` also blocks ptrace attach by same-uid processes and makes
-/// `/proc/<pid>/mem` unreadable; macOS only gets core dumps off (anti-attach needs FFI, which
-/// `unsafe_code = "forbid"` rules out). Debug builds skip it so debuggers work. Runs first, and
-/// again after the `--software-render` re-exec (exec resets the flag).
+/// `/proc/<pid>/mem` unreadable; macOS only gets core dumps off (anti-attach needs FFI, which the
+/// workspace's `unsafe_code = "deny"` keeps out of this crate). Debug builds skip it so debuggers
+/// work. Runs first, and again after the `--software-render` re-exec (exec resets the flag).
 fn harden_process() {
     #[cfg(unix)]
     {
