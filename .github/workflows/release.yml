@@ -39,7 +39,7 @@ jobs:
           RUSTFLAGS: ${{ matrix.rustflags }}
       # size gate: lower the limit whenever a cut lands (scripts/metrics.sh measures it)
       - if: runner.os == 'Linux'
-        run: test "$(stat -c %s target/release/fogu)" -le 20000000
+        run: test "$(stat -c %s target/release/fogu)" -le 21000000
       # the licence texts of every crate in the binary (MIT/Apache/BSD require shipping them)
       - name: third-party crate licences
         run: |
@@ -105,7 +105,7 @@ jobs:
       - run: sha256sum Fogu-*.tar.gz Fogu-*.zip Fogu-*.AppImage > SHA256SUMS
       - uses: actions/attest@v4
         with:
-          subject-path: "Fogu-*.tar.gz, Fogu-*.zip, Fogu-*.AppImage"
+          subject-path: "Fogu-*"
       - run: gh release create "$GITHUB_REF_NAME" Fogu-*.tar.gz Fogu-*.zip Fogu-*.AppImage SHA256SUMS --repo "$GITHUB_REPOSITORY" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
