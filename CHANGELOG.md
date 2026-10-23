@@ -2,6 +2,11 @@
 
 ## 0.1.6 (2026-10-23)
 
+### Added
+- Windows support (alpha): ConPTY shells, Credential Manager, the OpenSSH agent pipe and Windows
+  SFTP paths, by [@Federicokalik](https://github.com/Federicokalik) in
+  [#3](https://github.com/Revdep/Fogu/pull/3). Thank you!
+
 ### Security
 - Windows: network (UNC) paths in links and in the working directory a program reports are never
   touched, so they can't leak your Windows password hash.
