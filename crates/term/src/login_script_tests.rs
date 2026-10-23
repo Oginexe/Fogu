@@ -1,5 +1,3 @@
-#![expect(clippy::indexing_slicing, reason = "tests")]
-
 use fogu_core::LoginScript;
 
 use super::*;

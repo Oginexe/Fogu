@@ -143,6 +143,10 @@ fn done_report(event: SftpEvent) -> TransferReport {
 }
 
 /// Deterministic pseudo-random bytes (xorshift).
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "keeps the top byte of the xorshift state"
+)]
 fn random_bytes(len: usize) -> Vec<u8> {
     let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
     (0..len)

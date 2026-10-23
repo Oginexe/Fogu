@@ -29,7 +29,6 @@ pub fn cursor_shape(cfg: CursorShapeCfg) -> CursorShape {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 

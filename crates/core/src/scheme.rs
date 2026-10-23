@@ -22,6 +22,10 @@ pub struct RgbColor {
 
 impl RgbColor {
     /// Builds a colour from a `0xRRGGBB` literal.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "byte extraction from 0xRRGGBB"
+    )]
     pub const fn from_hex(hex: u32) -> Self {
         Self {
             r: (hex >> 16) as u8,
@@ -73,7 +77,7 @@ impl<'de> Deserialize<'de> for RgbColor {
 }
 
 /// Foreground/background/cursor/selection plus the 16 ANSI colours (0–7 normal, 8–15 bright).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ColorScheme {
     /// Display name, matched by [`ColorScheme::by_name`] and `Config.appearance.color_scheme`.
     pub name: String,
@@ -153,7 +157,6 @@ impl Default for ColorScheme {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 

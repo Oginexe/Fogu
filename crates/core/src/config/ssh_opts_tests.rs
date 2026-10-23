@@ -1,10 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::indexing_slicing,
-    reason = "tests"
-)]
-
 use std::path::PathBuf;
 
 use super::*;

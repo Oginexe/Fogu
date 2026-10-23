@@ -73,7 +73,6 @@ impl Default for SftpCfg {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     #[test]
     fn sftp_section_overrides_and_defaults() {

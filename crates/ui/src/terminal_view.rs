@@ -203,14 +203,15 @@ impl<'a> TerminalView<'a> {
         let mut runs = Vec::new();
         for (row, cells) in self.snapshot.rows().enumerate() {
             row_runs(cells, self.colors, &mut runs);
-            for run in &runs {
+            // Drained: each run's text moves into the renderer instead of being cloned.
+            for run in runs.drain(..) {
                 let rect = self.cell_rect(origin, run.col, row, run.cols);
                 if let Some(bg) = explicit_bg(&run.style, default_bg) {
                     fill(renderer, rect, bg);
                 }
                 if !run.style.hidden && !run.text.trim_end().is_empty() {
                     let color = run.style.fg;
-                    self.draw_text(renderer, run.text.clone(), rect, &run.style, color, clip);
+                    self.draw_text(renderer, run.text, rect, &run.style, color, clip);
                 }
                 self.draw_decorations(renderer, rect, &run.style);
             }

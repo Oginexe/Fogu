@@ -222,7 +222,7 @@ pub struct ProfileDefaults {
 }
 
 /// A profile with every option resolved to a concrete value, ready to open a session.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[expect(
     clippy::large_enum_variant,
     reason = "built once per opened tab and moved into the session task"
@@ -312,7 +312,6 @@ pub fn effective_osc52_write(profile: &Profile, global_default: Osc52Policy) -> 
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
     use super::*;
 

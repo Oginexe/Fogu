@@ -203,17 +203,7 @@ impl fmt::Debug for PromptReply {
     }
 }
 
-/// Makes server-supplied text safe to show: drops control characters (C0 except `\n` when
-/// `keep_newlines`, DEL, C1) and bidi overrides/isolates (U+202A–202E, U+2066–2069, which can
-/// make a prompt read differently than it is), then caps it at `max_chars`.
-#[must_use]
-pub fn sanitize_remote(text: &str, max_chars: usize, keep_newlines: bool) -> String {
-    text.chars()
-        .filter(|&c| (keep_newlines && c == '\n') || !c.is_control())
-        .filter(|c| !matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'))
-        .take(max_chars)
-        .collect()
-}
+pub use fogu_term::sanitize_remote;
 
 #[cfg(test)]
 mod tests {

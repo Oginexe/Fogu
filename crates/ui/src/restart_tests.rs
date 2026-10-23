@@ -1,5 +1,4 @@
 //! Reducer tests for "press any key to restart/reconnect" and history kept across it.
-#![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
 
 use std::sync::Arc;
 

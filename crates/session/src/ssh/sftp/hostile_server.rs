@@ -3,7 +3,6 @@
 //! lying `realpath`, endless listings and oversized data replies, plus a scripted free-space
 //! probe. Deletions are counted, never performed.
 #![expect(
-    clippy::unwrap_used,
     clippy::unused_async_trait_impl,
     reason = "tests; the fake server implements async trait methods that need no await"
 )]

@@ -357,7 +357,7 @@ impl App {
     }
 
     /// Every pane closed (the last tab went away): nothing to restore next time.
-    pub(crate) fn forget_session(&mut self) {
+    pub(crate) fn forget_session(&self) {
         if let Some(recovery) = &self.recovery
             && let Err(err) = recovery::clear(&recovery.dir)
         {
@@ -405,14 +405,14 @@ impl App {
         if !yes {
             return Task::none();
         }
-        let result = recovery::clear(&recovery.dir);
+        let result = recovery::clear(&recovery.dir)
+            .map_err(|err| format!("{}: {err}", recovery.dir.display()));
         recovery.last_session.clear();
         recovery.written.clear();
         match result {
             Ok(()) => self.notify(Notification::new(Level::Info, "Saved sessions cleared")),
-            Err(err) => self.notify(
-                Notification::new(Level::Error, "Could not clear saved sessions")
-                    .detail(err.to_string()),
+            Err(why) => self.notify(
+                Notification::new(Level::Error, "Could not clear saved sessions").detail(why),
             ),
         }
     }

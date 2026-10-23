@@ -1,5 +1,3 @@
-#![expect(clippy::unwrap_used, reason = "tests")]
-
 use super::*;
 
 #[test]

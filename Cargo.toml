@@ -14,123 +14,83 @@ license = "MIT"
 version = "0.1.6"
 
 [workspace.dependencies]
-# why: the GUI toolkit. Pinned to the exact
-# patch (only 0.14.0 exists on crates.io as of this writing) because iced breaks between minors.
-# `wgpu`/`tiny-skia` are already iced's default features; listed explicitly so
-# the renderer choice is visible here instead of relying on upstream defaults. No `tokio` feature:
-# iced::application uses its own default executor (iced_futures::backend::default::Executor)
-# regardless of this feature; add it only if iced ever needs to drive a tokio runtime.
-# `advanced`: the custom `Widget` trait, `fill_quad`/`fill_text` and the cosmic-text/fontdb
-# re-exports the terminal widget draws and measures with.
-# `image-without-codecs`: image handles + the renderer's image pipeline for tab background
-# images; we decode ourselves (bounded, off the UI thread) and hand iced raw RGBA, so iced's
-# default codec set (gif, tiff, exr, …) is not pulled in.
-iced = { version = "=0.14.0", features = ["wgpu", "tiny-skia", "advanced", "image-without-codecs"] }
-# why: rasterizes the title bar's stroke icons into image handles; already in the tree as
-# iced's software renderer, pinned to the same version. iced_wgpu 0.14's canvas meshes draw only
-# the last canvas of a frame, so `canvas` is not used.
-tiny-skia = "=0.11.4"
-# why: structured logging, used by `fogu`'s main().
+# why: the GUI toolkit, pinned exactly (it breaks between minors). `advanced` for the terminal
+# widget; no codecs (we decode, bounded); no desktop-theme detection (it pulls mundy + zbus).
+iced = { version = "=0.14.0", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "thread-pool", "x11", "wayland", "advanced", "image-without-codecs"] }
+# why: rasterizes the title-bar icons; already in the tree as iced's software renderer
+tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", "simd"] }
+# why: structured logging
 tracing = "0.1.44"
-# why: login-script `expect` regexes; linear-time matching with a
-# compiled size limit, so a profile's pattern cannot stall the session task.
+# why: login-script patterns: linear time with a size limit, so a pattern can't stall a session
 regex = "1.13.1"
-# why: tracing subscriber with env-filter so `RUST_LOG` controls verbosity; `tracing-log` (a default
-# feature, listed explicitly) is the `log` -> tracing bridge for dependencies, so no direct
-# `tracing-log` dependency is needed.
+# why: `RUST_LOG` filtering; `tracing-log` bridges dependencies' `log` records
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "tracing-log"] }
-# why: non-blocking daily-rotated log file in $XDG_STATE_HOME/fogu.
-tracing-appender = "0.2.5"
-# why: async runtime for session tasks; multi-thread rt, mpsc, child
-# process wait, timers, `select!`.
-# `net`: TCP for russh's `client::connect`.
+# why: async runtime for the sessions (`net` for russh)
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "process", "io-util", "time", "macros", "net", "fs"] }
-# why: tokio-native PTY open/spawn/resize without unsafe in our code (Unix).
+# why: Unix PTYs, tokio-native, no `unsafe` in our code
 pty-process = { version = "0.5.3", features = ["async"] }
-# why: safe `dup`, `tcsetwinsize`, `getuid`, process-group SIGKILL and `uname`; already in the
-# tree via pty-process.
+# why: safe `dup`, `tcsetwinsize`, `getuid`, process-group kill, `uname`; already in the tree
 rustix = { version = "1.1.5", features = ["termios", "process", "fs", "system"] }
-# why: ConPTY on Windows and Unix PTYs behind one safe API. Used only by the Windows local
-# session; the Unix path keeps `pty-process` and its direct fd control.
+# why: ConPTY for the Windows local session
 portable-pty = "0.9.0"
-# why: cheap shareable byte buffers for `SessionInput::Data` and the pending-write queue.
+# why: cheap shared buffers for session input
 bytes = "1.12.1"
-# why: one error enum per library domain (`SessionError`).
+# why: typed error enums
 thiserror = "2.0.21"
-# why: the VT engine (parser, grid, scrollback, reflow): mature, maintained, used by Alacritty.
+# why: the VT engine (parser, grid, scrollback, reflow)
 alacritty_terminal = "0.26.0"
-# why: snapshot tests of grid state (dev-dependency only).
+# why: snapshot tests (dev only)
 insta = "1.49.0"
-# why: `Config`/`Profile`/`ColorScheme` (de)serialisation; `derive` only, no
-# other feature needed.
+# why: config and profile (de)serialisation
 serde = { version = "1.0.229", features = ["derive"] }
-# why: JSON for the tab-recovery history file: human-debuggable and easy to
-# validate on load.
+# why: the tab-recovery history file
 serde_json = "1.0.154"
-# why: native config file format: human-editable, comments allowed, no YAML
-# type-coercion surprises. `preserve_order`: tables keep struct field order, so keys the
-# profile editor adds to config.toml come in the documented order (indexmap is already in the tree).
+# why: the config format; `preserve_order` keeps the documented key order on write
 toml = { version = "1.1.8", features = ["preserve_order"] }
-# why: edit config.toml in place, keeping the user's comments and order (a whole-file `toml`
-# round trip would drop them). Default features only (parse + display), pure Rust.
+# why: edits config.toml in place, keeping the user's comments and order
 toml_edit = "0.25.17"
-# why: `$XDG_CONFIG_HOME/fogu` path. Chose `xdg` over
-# `directories`: macOS keeps the same `~/.config/fogu` (dotfile-friendly, one documented path),
-# so `directories`' per-OS path logic is not needed; `xdg` is the smaller crate for exactly the
-# XDG Base Directory spec we need (it builds on any unix).
+# why: `$XDG_CONFIG_HOME/fogu` on every Unix, macOS included (one documented path)
 xdg = "3.0.0"
-# why: platform config/state/home/download directories. `dirs` respects the XDG
-# variables on Linux and the known folders on Windows, so one crate covers both
-# targets without carrying a Linux-only dependency into the Windows build.
+# why: platform config/state/home/download directories (XDG on Linux, known folders on Windows)
 dirs = "7.0.0"
 
-# why: the SSH client: pure Rust, tokio-native, actively maintained. `ring` backend instead of
-# the default `aws-lc-rs` (C/cmake, banned in deny.toml); `flate2` for zlib compression. No
-# `rsa`: RUSTSEC-2023-0071 has no fix (security advisories are never ignored), so RSA private
-# keys are refused visibly in `ssh/auth.rs`. 0.x: minor bumps break the API, so every russh call
-# stays in `session/src/ssh/`.
+# why: the SSH client; `ring` instead of `aws-lc-rs` (banned in deny.toml), no `rsa`
+# (RUSTSEC-2023-0071 has no fix: RSA private keys are refused in `ssh/auth.rs`).
 russh = { version = "0.64.1", default-features = false, features = ["ring", "flate2"] }
-# why: HMAC-SHA1 to match hashed `|1|salt|hash` known_hosts entries; already in the tree as
-# russh's crypto backend (same version), so no new code.
+# why: HMAC-SHA1 for hashed known_hosts entries; already russh's crypto backend
 ring = "0.17.14"
-# why: the SFTP client: the russh project's own SFTP v3 subsystem, tokio-native, runs on a
-# channel of the existing russh connection (no second login).
+# why: SFTP on a channel of the existing SSH connection
 russh-sftp = "3.0.1"
-# why: `CancellationToken` for per-transfer cancel checked between chunks; already in the
-# tree via russh/russh-sftp. No default features needed.
+# why: `CancellationToken` for transfer cancel; already in the tree
 tokio-util = { version = "0.7.20", default-features = false }
-# why: passwords/passphrases/keyboard-interactive answers live only in `SecretString`
-# (zeroize-on-drop, redacted `Debug`).
+# why: secrets only in `SecretString` (zeroed on drop, redacted `Debug`)
 secrecy = "0.10.3"
-# why: stored SSH passwords / key passphrases in the desktop Secret Service (D-Bus, KWallet or
-# gnome-keyring). `native_crypto` = pure-Rust session encryption (no
-# openssl, banned in deny.toml); `tokio` = zbus on the session runtime. No file/portal backend is
-# used: we talk to the `dbus` module only, so a missing service never falls back to a file.
+# why: Secret Service passwords over D-Bus only (never a file fallback); pure-Rust crypto
 oo7 = { version = "0.6.0", default-features = false, features = ["tokio", "native_crypto"] }
-# why: macOS only: stored passwords in the login Keychain (generic passwords, safe API).
+# why: macOS Keychain passwords
 security-framework = "3.7.0"
-# why: Windows Credential Manager through a safe API (no `unsafe` in our code). The Linux
-# build keeps `oo7`/Secret Service; only the Windows target pulls `windows-native`.
+# why: Windows Credential Manager passwords
 keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
 
-# why: native file pickers for SFTP upload/download.
-# Only the `xdg-portal` backend (D-Bus portal, zenity fallback): no GTK, no `wayland` feature (the
-# portal needs no Wayland handle since we open the dialog without a parent window).
+# why: Windows only: file DACLs and the agent pipe owner (`fogu_core::winsec`); already in the tree
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Threading",
+] }
+
+# why: native file pickers; `xdg-portal` only (no GTK)
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
-# why: opening a path or URL with the desktop's default application (`xdg-open` on Linux,
-# `ShellExecute` on Windows) through one safe API.
+# why: open a path or URL with the desktop's default application
 open = "5.4.4"
-# why: decoding tab background images with size/dimension limits and downscaling; the same
-# 0.25 crate iced's image feature already depends on (one version in the tree), only the three
-# formats we accept (PNG, JPEG, WebP; all pure-Rust decoders).
+# why: tab background images with size limits; the same 0.25 iced uses, PNG/JPEG/WebP only
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 
-# why: command-line flags (`--config-dir`, `--software-render`, `--version`).
-# `derive` keeps the flag definitions declarative; default features (help, usage, errors) only.
-clap = { version = "4.6.7", features = ["derive"] }
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# `deny`, not `forbid`: `fogu_core::winsec` (Windows only) is the one module allowed to opt out.
+unsafe_code = "deny"
 missing_debug_implementations = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
 
@@ -142,22 +102,30 @@ panic = "warn"
 todo = "warn"
 dbg_macro = "warn"
 print_stdout = "warn"
-indexing_slicing = "warn"
 undocumented_unsafe_blocks = "deny"
+redundant_clone = "warn"
 # pedantic noise we accept:
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
-cast_possible_truncation = "allow"
 
 [profile.release]
-opt-level = 3
+# "s": -8 MB against 3, feed throughput -1% and first frame unchanged (scripts/metrics.sh)
+opt-level = "s"
 lto = "fat"
 codegen-units = 1
 panic = "unwind"
 strip = "symbols"
 debug = false
+
+# The terminal engine stays at 3: "s" cost it ~10% of feed throughput.
+[profile.release.package.alacritty_terminal]
+opt-level = 3
+[profile.release.package.vte]
+opt-level = 3
+[profile.release.package.fogu-term]
+opt-level = 3
 
 [profile.release-dev]
 inherits = "release"

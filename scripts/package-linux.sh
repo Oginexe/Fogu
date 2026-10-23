@@ -3,7 +3,8 @@
 #   dist/Fogu-<version>-linux-x86_64.tar.gz  (binary, icons, .desktop entry, install.sh)
 # The build runs in the manylinux_2_28 image (AlmaLinux 8, glibc 2.28) through Docker, so the
 # binary starts on Debian 10+, Ubuntu 20.04+, RHEL/Alma/Rocky 8+, Fedora, Arch and newer; the
-# release built on this machine needs the host's much newer glibc. Needs: docker. Downloads stay in the `fogu-cargo` volume between runs.
+# release built on this machine needs the host's much newer glibc. Needs: docker, cargo-about
+# (`cargo install --locked --features cli cargo-about@0.9.2`). Downloads stay in the `fogu-cargo` volume between runs.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -12,11 +13,18 @@ toolchain=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
 image="fogu-build:manylinux228-$toolchain"
 name="Fogu-$version-linux-x86_64"
 
+# Image and rustup-init pinned by hash: a changed upstream file fails the build instead of running.
+# To update, take the new digest (`docker manifest inspect -v`) and rustup-init.sha256.
 docker build --network host -q -t "$image" - <<EOF >/dev/null
-FROM quay.io/pypa/manylinux_2_28_x86_64
+FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:076b19ef6e698f28649fa817c49d14443201e01da85240e8e52f93e8daa49bff
 ENV RUSTUP_HOME=/opt/rustup PATH=/opt/cargo/bin:\$PATH
-RUN curl -sSf https://sh.rustup.rs | CARGO_HOME=/opt/cargo sh -s -- -y --profile minimal \
-        --default-toolchain $toolchain
+RUN curl -sSfo /tmp/rustup-init \
+        https://static.rust-lang.org/rustup/archive/1.29.2/x86_64-unknown-linux-gnu/rustup-init \
+    && echo "5be191e8c70a5007074254cb74d78dbfdd25cd5a61c27de7b8e5410122ec24f4  /tmp/rustup-init" \
+        | sha256sum -c - \
+    && chmod +x /tmp/rustup-init \
+    && CARGO_HOME=/opt/cargo /tmp/rustup-init -y --profile minimal --default-toolchain $toolchain \
+    && rm /tmp/rustup-init
 EOF
 
 # Root in the container: the output is handed back to the caller's uid at the end.
@@ -34,6 +42,8 @@ mkdir -p "$stage/$name/icons"
 install -m755 "$bin" "$stage/$name/fogu"
 cp assets/icons/fogu-{48,128,256,512}.png "$stage/$name/icons/"
 cp assets/fogu.desktop "$stage/$name/"
+cp LICENSE THIRD_PARTY_LICENSES assets/fonts/*-LICENSE.txt "$stage/$name/"
+cargo about generate --locked -m crates/app/Cargo.toml about.hbs -o "$stage/$name/THIRD_PARTY_CRATES"
 cat > "$stage/$name/install.sh" <<'EOF'
 #!/usr/bin/env bash
 # Installs Fogu for the current user (no root): ~/.local/bin, menu entry, icons.

@@ -109,7 +109,6 @@ fn reply_text(code: u8) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use std::net::Ipv6Addr;
 

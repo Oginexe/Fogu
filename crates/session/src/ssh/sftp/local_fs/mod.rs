@@ -30,40 +30,10 @@ use crate::sftp::NameError;
 
 /// Accepts `name` as one local path component on this platform.
 pub(crate) fn validate_name(name: &str) -> Result<&str, NameError> {
-    let name = crate::sftp::validate_name(name)?;
     #[cfg(windows)]
-    windows_name(name)?;
-    Ok(name)
-}
-
-/// Windows adds rules the SFTP/Unix name check does not cover: reserved device names, characters
-/// that name a stream or a separator, and trailing dots/spaces that Windows silently strips.
-#[cfg(windows)]
-fn windows_name(name: &str) -> Result<(), NameError> {
-    const RESERVED: [&str; 22] = [
-        "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
-        "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
-    ];
-    if name.ends_with(['.', ' ']) {
-        return Err(NameError::Invalid);
-    }
-    if name
-        .chars()
-        .any(|c| matches!(c, '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*'))
-    {
-        return Err(NameError::Invalid);
-    }
-    let stem = name
-        .split_once('.')
-        .map_or(name, |(stem, _rest)| stem)
-        .trim_end_matches(['.', ' ']);
-    if RESERVED
-        .iter()
-        .any(|reserved| stem.eq_ignore_ascii_case(reserved))
-    {
-        return Err(NameError::Invalid);
-    }
-    Ok(())
+    return crate::sftp::validate_windows_name(name);
+    #[cfg(unix)]
+    crate::sftp::validate_name(name)
 }
 
 /// Suffix of a download in progress.

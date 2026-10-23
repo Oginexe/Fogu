@@ -205,7 +205,7 @@ fn fuzz_regression_arbitrary_bytes_never_panics() {
     let mut s = OscScanner::new();
     let mut data = Vec::new();
     for i in 0..5000_u32 {
-        data.push((i % 256) as u8);
+        data.push(i.to_le_bytes()[0]);
     }
     let _ = s.scan(&data);
     assert!(s.buf.len() <= MAX_SEQUENCE);

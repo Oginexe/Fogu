@@ -729,7 +729,7 @@ fn file_fingerprint(text: &SecretString) -> String {
     let digest = ring::digest::digest(&ring::digest::SHA256, text.expose_secret().as_bytes());
     let mut hex = String::from("file:sha256:");
     for byte in digest.as_ref() {
-        let _ = write!(hex, "{byte:02x}");
+        let _infallible = write!(hex, "{byte:02x}");
     }
     hex
 }

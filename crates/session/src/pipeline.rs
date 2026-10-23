@@ -253,6 +253,9 @@ fn is_local_host(host: &str, local_hostname: &str) -> bool {
 /// Resolves and validates a reported local path (realpath-resolved, unusable cwds ignored); `None`
 /// if it doesn't canonicalize to an existing directory.
 pub(crate) fn canonical_dir(path: &Path) -> Option<PathBuf> {
+    if !fogu_core::platform::is_local_path(path) {
+        return None;
+    }
     let canon = path.canonicalize().ok()?;
     canon.is_dir().then_some(canon)
 }
@@ -282,5 +285,18 @@ pub(crate) fn local_hostname() -> String {
     #[cfg(not(any(unix, windows)))]
     {
         String::new()
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    /// Resolving a UNC cwd (OSC 7/1337 from any output) would connect to the host.
+    #[test]
+    fn a_network_cwd_is_never_resolved() {
+        assert_eq!(
+            super::canonical_dir(std::path::Path::new(r"\\localhost\c$")),
+            None
+        );
+        assert!(super::canonical_dir(&std::env::temp_dir()).is_some());
     }
 }

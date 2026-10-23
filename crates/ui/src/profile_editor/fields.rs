@@ -290,6 +290,10 @@ impl ProfileEditor {
     }
 
     /// The explicit value behind a number field (`None` means inherited / empty).
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "opacity is 0..=1, so 0..=100"
+    )]
     fn current_number(&self, id: FieldId) -> Option<i64> {
         if id == FieldId::BgOpacity {
             return match &self.draft.background {

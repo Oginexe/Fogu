@@ -466,8 +466,11 @@ async fn verify(
                 PromptReply::AcceptAndSave => {
                     if let Err(err) = hostkeys::learn(&paths.known_hosts, kh_host, kh_port, key) {
                         tracing::warn!(error = %err, "could not save the host key");
-                        ui.service(&format!("Could not save the host key: {err}"))
-                            .await?;
+                        ui.service(&format!(
+                            "Could not save the host key in {}: {err}",
+                            paths.known_hosts.display()
+                        ))
+                        .await?;
                     }
                     Ok(())
                 }
@@ -500,8 +503,11 @@ async fn verify(
                         Ok(()) => Ok(()),
                         Err(err) => {
                             tracing::warn!(error = %err, "could not replace the host key");
-                            ui.service(&format!("Could not replace the host key: {err}"))
-                                .await?;
+                            ui.service(&format!(
+                                "Could not replace the host key in {}: {err}",
+                                paths.known_hosts.display()
+                            ))
+                            .await?;
                             refuse(HostKeyFailure::Changed)
                         }
                     }

@@ -230,7 +230,7 @@ impl App {
         .map(|e| {
             ui(
                 e.profile.name.clone(),
-                Message::Profiles(ProfilesMsg::RowOpen(e.profile.id.clone(), Launch::Tab)),
+                Message::Profiles(ProfilesMsg::RowOpen(e.profile.id, Launch::Tab)),
             )
         })
         .collect()
@@ -347,7 +347,8 @@ impl App {
         let text = export_text(pane, lines);
         let note = match fogu_core::fsutil::write_private_atomic(&path, text.as_bytes()) {
             Ok(()) => Notification::new(Level::Info, "Exported").detail(path.display().to_string()),
-            Err(err) => Notification::new(Level::Error, "Export failed").detail(err.to_string()),
+            Err(err) => Notification::new(Level::Error, "Export failed")
+                .detail(format!("{}: {err}", path.display())),
         };
         self.notify(note)
     }

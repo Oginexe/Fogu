@@ -3,6 +3,10 @@
 
 use iced::Color;
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "byte extraction from 0xRRGGBB"
+)]
 const fn hex(rgb: u32) -> Color {
     Color::from_rgb8((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
 }

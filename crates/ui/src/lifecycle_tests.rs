@@ -1,5 +1,4 @@
 //! Reducer tests for pane lifecycle (exit policy, crashes), OSC 52 policy and toasts.
-#![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
 
 use std::io;
 use std::sync::Arc;

@@ -167,6 +167,7 @@ fn cover_size(image: Size<u32>, target: Size<u32>) -> Option<Size<u32>> {
 
 /// `v` rounded up to whole pixels, at least 1.
 #[expect(
+    clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "clamped to 1..=u32::MAX first; `as` saturates"
 )]
@@ -175,6 +176,10 @@ pub fn px(v: f64) -> u32 {
 }
 
 /// Where to draw an image of `image` px inside `area` for `fit` (the caller clips to `area`).
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "u32 to f32 through f64: image sizes are far below f32 precision"
+)]
 pub fn placements(area: Rectangle, image: Size<u32>, fit: Fit) -> Vec<Rectangle> {
     let (iw, ih) = (
         f64::from(image.width) as f32,
@@ -324,7 +329,6 @@ impl Cache {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 

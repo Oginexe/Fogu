@@ -182,7 +182,7 @@ async fn run_loop(
         // Queue at most one write at a time; input accumulates in `pump.pending` meanwhile.
         if !write_in_flight && !pump.pending.is_empty() {
             let chunk = pump.pending.len().min(WRITE_CHUNK);
-            let bytes = pump.pending.get(..chunk).unwrap_or_default().to_vec();
+            let bytes = pump.pending[..chunk].to_vec();
             if local.write_tx.send(bytes).await.is_err() {
                 pump.write_failed();
             } else {
@@ -326,7 +326,7 @@ fn read_loop(mut reader: Box<dyn io::Read + Send>, tx: Sender<io::Result<Vec<u8>
                 return;
             }
             Ok(n) => {
-                let chunk = buf.get(..n).unwrap_or_default().to_vec();
+                let chunk = buf[..n].to_vec();
                 if tx.blocking_send(Ok(chunk)).is_err() {
                     return;
                 }
@@ -360,18 +360,11 @@ fn write_loop(
 /// The user's default shell on Windows: PowerShell 7, then Windows PowerShell, then `cmd.exe`.
 fn default_shell() -> String {
     for name in ["pwsh.exe", "powershell.exe"] {
-        if let Some(path) = find_in_path(name) {
+        if let Some(path) = fogu_core::platform::find_in_path(name) {
             return path.to_string_lossy().into_owned();
         }
     }
     std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_owned())
-}
-
-fn find_in_path(name: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|dir| dir.join(name))
-        .find(|path| path.is_file())
 }
 
 #[cfg(test)]

@@ -54,3 +54,10 @@ path = "fuzz_targets/history_load.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "proxy_command_expand"
+path = "fuzz_targets/proxy_command_expand.rs"
+test = false
+doc = false
+bench = false

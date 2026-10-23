@@ -1,5 +1,4 @@
 //! Reducer tests for the port forwarding dialog on a headless `App` with stub sessions.
-#![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
 use fogu_core::{ForwardKind, PortForward, ProfileKind};
 use fogu_session::{

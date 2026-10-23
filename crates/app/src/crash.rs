@@ -72,7 +72,6 @@ pub fn install(state_dir: Option<PathBuf>) {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 

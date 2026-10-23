@@ -1,3 +1,7 @@
 too-many-lines-threshold = 100
 cognitive-complexity-threshold = 25
 msrv = "1.99.0"
+# tests may unwrap, expect and panic: a failing test should stop right there
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true

@@ -1,10 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    clippy::indexing_slicing,
-    clippy::panic,
-    reason = "tests"
-)]
-
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 

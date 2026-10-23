@@ -172,7 +172,8 @@ pub(crate) async fn run_local(
         }
         Ok(End::Close) => close(local).await,
         Err(Gone) => {
-            close(local).await.ok();
+            // The UI is gone: there is nobody to report the exit status to.
+            let _status = close(local).await;
             return;
         }
     };
@@ -228,7 +229,7 @@ async fn run_loop(
                 }
                 Some(SessionInput::Close) | None => return Ok(End::Close),
             },
-            written = local.writer.write(pump.pending.get(..chunk).unwrap_or_default()),
+            written = local.writer.write(&pump.pending[..chunk]),
                 if chunk > 0 => match written {
                 Ok(n) => pump.written(n),
                 Err(err) => {
@@ -238,7 +239,7 @@ async fn run_loop(
             },
             read = local.reader.read(buf), if !local.eof => match read {
                 Ok(0) => local.eof = true,
-                Ok(n) => pump.feed(buf.get(..n).unwrap_or_default()).await?,
+                Ok(n) => pump.feed(&buf[..n]).await?,
                 Err(err) => {
                     if !is_eof(&err) {
                         tracing::warn!(error = %err, "PTY read failed");
@@ -267,7 +268,7 @@ async fn drain(reader: &mut OwnedReadPty, pump: &mut Pump, buf: &mut [u8]) -> Re
         if n == 0 {
             break;
         }
-        pump.feed(buf.get(..n).unwrap_or_default()).await?;
+        pump.feed(&buf[..n]).await?;
     }
     Ok(())
 }
@@ -470,7 +471,6 @@ mod tests {
     /// running meanwhile (one thread, so a blocking call would starve the spawned task).
     #[cfg(target_os = "macos")]
     #[test]
-    #[expect(clippy::unwrap_used, reason = "test")]
     fn macos_lookups_do_not_block_the_runtime() {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, Ordering};

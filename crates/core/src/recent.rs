@@ -86,7 +86,6 @@ impl Recent {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
 
     use super::*;
 

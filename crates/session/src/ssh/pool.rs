@@ -152,6 +152,7 @@ pub(crate) fn start(
     out: Sender<SessionOutput>,
 ) -> (Lease, JoinHandle<()>) {
     static NEXT: AtomicU64 = AtomicU64::new(0);
+    // Unbounded is fine: commands come one per user action (open a pane, add a forward, close).
     let (cmds, cmds_rx) = mpsc::unbounded_channel();
     let handle = Arc::new(conn.handle);
     let shared = Arc::new(Shared {

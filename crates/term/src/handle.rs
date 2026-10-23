@@ -71,6 +71,10 @@ impl fmt::Debug for TermHandle {
 }
 
 // alacritty's reflow never terminates at 1 column once a wide char is on screen
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "alacritty's MIN_COLUMNS is 2"
+)]
 const MIN_COLS: u16 = MIN_COLUMNS as u16;
 
 impl TermHandle {
@@ -340,7 +344,13 @@ impl TermHandle {
 
     /// Copies the visible rows under a short lock.
     pub fn snapshot(&self) -> RenderSnapshot {
-        RenderSnapshot::capture(&self.term.lock())
+        RenderSnapshot::capture(&self.term.lock(), Vec::new())
+    }
+
+    /// [`Self::snapshot`] into `cells`, the previous snapshot's buffer: no new allocation per
+    /// refresh.
+    pub fn snapshot_reusing(&self, cells: Vec<crate::Cell>) -> RenderSnapshot {
+        RenderSnapshot::capture(&self.term.lock(), cells)
     }
 
     /// Takes all events produced since the last call.

@@ -1,5 +1,3 @@
-#![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
-
 use super::*;
 use crate::{TermHandle, WORD_SEPARATORS};
 

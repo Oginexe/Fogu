@@ -20,9 +20,6 @@ ignore = [
 
 [licenses]
 version = 2
-# MPL-2.0 isn't used by any current dependency; kept allowed for likely future SSH/TLS
-# deps, so don't warn about it being unmatched yet.
-unused-allowed-license = "allow"
 allow = [
     "MIT",
     "Apache-2.0",
@@ -31,7 +28,7 @@ allow = [
     "ISC",
     "Zlib",
     "Unicode-3.0",
-    "MPL-2.0",
+    "MPL-2.0", # option-ext (via dirs)
     "BSL-1.0", # clipboard-win, error-code (via iced_winit -> window_clipboard)
     "CC0-1.0", # hexf-parse (via iced's wgpu backend: naga)
 ]

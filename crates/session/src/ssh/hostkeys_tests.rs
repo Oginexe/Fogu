@@ -1,5 +1,4 @@
 #![cfg(unix)]
-#![expect(clippy::unwrap_used, reason = "tests")]
 
 use std::os::unix::fs::PermissionsExt as _;
 
@@ -166,7 +165,7 @@ fn learn_writes_0600_openssh_lines_and_lookup_finds_them() {
         text,
         format!("host.example ssh-ed25519 {KEY_A}\n[host.example]:2200 ssh-ed25519 {KEY_B}\n")
     );
-    let files = [path.clone()];
+    let files = [path];
     assert_eq!(
         lookup(&files, "host.example", 22, &key(KEY_A)),
         Lookup::Known
@@ -174,6 +173,21 @@ fn learn_writes_0600_openssh_lines_and_lookup_finds_them() {
     assert_eq!(
         lookup(&files, "host.example", 2200, &key(KEY_B)),
         Lookup::Known
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_cert_authority_line_alone_never_makes_a_host_known() {
+    let dir = temp_dir("ca");
+    let path = write(
+        &dir,
+        "known_hosts",
+        &format!("@cert-authority *.example ssh-ed25519 {KEY_B}\n"),
+    );
+    assert_eq!(
+        lookup(&[path], "y.example", 22, &key(KEY_B)),
+        Lookup::Unknown
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -195,6 +209,11 @@ fn hostile_host_names_are_written_hashed() {
         lookup(&files, "other.example", 22, &key(KEY_A)),
         Lookup::Unknown
     );
+    // Hashed `[host]:port`: the port is part of the hashed name.
+    learn(&path, "odd host", 2222, &key(KEY_B)).unwrap();
+    let files = [path];
+    assert_eq!(lookup(&files, "odd host", 2222, &key(KEY_B)), Lookup::Known);
+    assert_eq!(lookup(&files, "odd host", 22, &key(KEY_B)), Lookup::Unknown);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

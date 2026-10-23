@@ -384,7 +384,6 @@ async fn connect_back(incoming: Forwarded, (host, port): (String, u16)) {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, duplex};
 

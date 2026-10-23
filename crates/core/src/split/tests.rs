@@ -1,5 +1,3 @@
-#![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
-
 use super::*;
 
 /// Builds a tree from leaf `0`, applying `(new_leaf_id, target, side)` splits in order.

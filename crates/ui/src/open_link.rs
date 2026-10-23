@@ -60,7 +60,11 @@ pub fn resolve(link: &Link, local: bool, cwd: Option<&Path>) -> Result<Target, S
     }
     let path = match (link.kind, scheme(uri)) {
         (LinkKind::Path, _) => PathBuf::from(uri),
+        // Windows reads `\\` in a web link as `/`; a URL never needs one.
         (_, Some(s)) if WEB.iter().any(|w| s.eq_ignore_ascii_case(w)) => {
+            if uri.contains('\\') {
+                return Err("A web link with a backslash is not opened".to_owned());
+            }
             return Ok(Target::Url(uri.to_owned()));
         }
         // Only a local `file:///path` (or `file://C:/path` on Windows): a host would reach out
@@ -82,6 +86,9 @@ pub fn resolve(link: &Link, local: bool, cwd: Option<&Path>) -> Result<Target, S
             .join(path),
         Err(_) => path,
     };
+    if !fogu_core::platform::is_local_path(&path) {
+        return Err("A network path is never opened from a link".to_owned());
+    }
     if !path.exists() {
         return Err(format!("{} does not exist", path.display()));
     }
@@ -125,7 +132,6 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 
@@ -158,6 +164,7 @@ mod tests {
         assert!(blocked(resolve(&link("ftp://files.lan/a", U), true, cwd)).contains("ftp"));
         assert!(blocked(resolve(&link("file://evil.host/share", H), true, cwd)).contains("local"));
         assert!(blocked(resolve(&link("https://a.io/\u{7}x", H), true, cwd)).contains("control"));
+        assert!(blocked(resolve(&link(r"https:\\evil\share", H), true, cwd)).contains("backslash"));
         // Files: local panes only, and only when they exist.
         let here = tmp.to_string_lossy().into_owned();
         assert_eq!(
@@ -180,5 +187,25 @@ mod tests {
             Ok(Target::File(parent.join(&name)))
         );
         assert!(blocked(resolve(&link("rel/x", P), true, None)).contains("OSC 7"));
+    }
+
+    /// Even `exists()` on a UNC path connects to the host and sends the user's NTLM hash.
+    #[cfg(windows)]
+    #[test]
+    fn network_paths_are_never_touched() {
+        use LinkKind::{Hyperlink as H, Path as P};
+        let share = Some(Path::new(r"\\localhost\c$"));
+        for (uri, kind, cwd) in [
+            (r"\\localhost\c$\Windows", P, None),
+            ("//localhost/c$/Windows", P, None),
+            ("file:////localhost/c$/Windows", H, None),
+            ("Windows", P, share),
+        ] {
+            let why = resolve(&link(uri, kind), true, cwd).unwrap_err();
+            assert!(
+                why.contains("network") || why.contains("local"),
+                "{uri}: {why}"
+            );
+        }
     }
 }

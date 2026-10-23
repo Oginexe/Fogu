@@ -111,11 +111,12 @@ impl Transfer {
             return 0.0;
         }
         #[expect(
+            clippy::cast_possible_truncation,
             clippy::cast_precision_loss,
             reason = "a progress bar ratio; exactness beyond 2^52 bytes is irrelevant"
         )]
-        let ratio = self.bytes as f64 / self.total as f64;
-        ratio.clamp(0.0, 1.0) as f32
+        let ratio = (self.bytes as f64 / self.total as f64).clamp(0.0, 1.0) as f32;
+        ratio
     }
 }
 

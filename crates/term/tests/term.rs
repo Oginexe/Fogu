@@ -288,3 +288,13 @@ fn large_feed_is_chunked_without_loss() {
     t.feed(&bytes);
     assert_eq!(t.dump_grid(), "aaaaaaaaaa\nend\n");
 }
+
+#[test]
+fn a_refresh_reuses_the_cell_buffer() {
+    let t = fed(80, 24, b"hello");
+    let first = t.snapshot();
+    let buffer = first.cells.as_ptr();
+    let again = t.snapshot_reusing(first.cells);
+    assert_eq!(again.cells.as_ptr(), buffer);
+    assert_eq!(again, t.snapshot());
+}

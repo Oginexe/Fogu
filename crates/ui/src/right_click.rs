@@ -1,10 +1,6 @@
 //! `right_click(content, on)`: `content` unchanged, plus `on(pointer)` (window coordinates) on a
 //! right-press over it, so a field can open a context menu where it was clicked. `mouse_area`
 //! reports the press without the position.
-#![expect(
-    clippy::indexing_slicing,
-    reason = "`tree.children` is the one child `children()` creates"
-)]
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{Operation, Tree, Widget};

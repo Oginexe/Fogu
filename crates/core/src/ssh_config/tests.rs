@@ -1,10 +1,3 @@
-#![expect(
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::indexing_slicing,
-    reason = "tests"
-)]
-
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -489,7 +482,24 @@ fn missing_file_is_empty_and_changes_are_noticed() {
     assert!(config.changed(), "mtime changed");
 
     let config = SshConfig::load(&path, &env);
+    #[cfg(unix)]
+    let dir = env.home.join(".ssh/conf.d");
+    #[cfg(unix)]
+    let dir_mtime = std::fs::metadata(&dir).unwrap().modified().unwrap();
     write(&env, "conf.d/new", "Host two\n");
+    // Directory times can lag behind a new file: put it back, so the new entry counts on its own
+    // (Unix only: Windows can't open a directory as a file).
+    #[cfg(unix)]
+    {
+        std::fs::File::open(&dir)
+            .unwrap()
+            .set_modified(dir_mtime)
+            .unwrap();
+        assert_eq!(
+            std::fs::metadata(&dir).unwrap().modified().unwrap(),
+            dir_mtime
+        );
+    }
     assert!(config.changed(), "new file in a globbed directory");
     assert_eq!(SshConfig::load(&path, &env).aliases(), ["two", "one"]);
 }

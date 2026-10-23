@@ -435,6 +435,38 @@ pub fn validate_name(name: &str) -> Result<&str, NameError> {
     Ok(name)
 }
 
+/// [`validate_name`] plus what Windows adds: reserved device names (with any extension),
+/// characters that name a stream or a separator, and trailing dots/spaces that Windows silently
+/// strips. Pure, so it is tested and fuzzed on every platform.
+pub fn validate_windows_name(name: &str) -> Result<&str, NameError> {
+    const RESERVED: [&str; 2] = ["conin$", "conout$"];
+    let name = validate_name(name)?;
+    if name.ends_with(['.', ' ']) || name.contains(['\\', ':', '<', '>', '"', '|', '?', '*']) {
+        return Err(NameError::Invalid);
+    }
+    let stem = name
+        .split_once('.')
+        .map_or(name, |(stem, _rest)| stem)
+        .trim_end_matches(' ')
+        .to_ascii_lowercase();
+    // `con`, `prn`, `aux`, `nul`, then `com`/`lpt` with a digit or a superscript 1–3.
+    let device = match stem.get(..3) {
+        Some("con" | "prn" | "aux" | "nul") => stem.len() == 3,
+        Some("com" | "lpt") => {
+            let mut rest = stem.get(3..).unwrap_or_default().chars();
+            matches!(
+                (rest.next(), rest.next()),
+                (Some('0'..='9' | '\u{b9}' | '\u{b2}' | '\u{b3}'), None)
+            )
+        }
+        _ => false,
+    };
+    if device || RESERVED.contains(&stem.as_str()) {
+        return Err(NameError::Invalid);
+    }
+    Ok(name)
+}
+
 /// `name` made safe to show as plain text: control characters (C0, DEL, C1) and bidi
 /// overrides/isolates are escaped as `\xNN` / `\u{NNNN}`, a backslash is doubled (so an
 /// escape can't be faked), and the result is cut at [`DISPLAY_NAME_MAX_CHARS`] with `…`.
@@ -473,6 +505,48 @@ pub fn display_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_names_refuse_devices_streams_and_separators() {
+        for name in [
+            "CON",
+            "nul.txt",
+            "COM0",
+            "lpt9.log",
+            "COM\u{b9}",
+            "LPT\u{b3}.txt",
+            "CONIN$",
+            "conout$.x",
+            "CON .txt",
+            "a:b",
+            "file.txt::$DATA",
+            "C:",
+            "a\\b",
+            "..\\x",
+            "\\\\?\\C:",
+            "trail.",
+            "trail ",
+            "a<b",
+            "a|b",
+            "a*b",
+            "a?b",
+            "a\"b",
+            "..",
+            "a/b",
+        ] {
+            assert!(validate_windows_name(name).is_err(), "{name:?}");
+        }
+        for name in [
+            "console",
+            "COM10",
+            "nul_x.txt",
+            "report.pdf",
+            ".bashrc",
+            "a b",
+        ] {
+            assert_eq!(validate_windows_name(name), Ok(name));
+        }
+    }
 
     #[test]
     fn display_name_escapes_controls_bidi_and_backslash() {

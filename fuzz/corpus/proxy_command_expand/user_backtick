@@ -1,0 +1,3 @@
+ssh -l %r gw
+h
+me`id`

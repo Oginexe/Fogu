@@ -1,7 +1,6 @@
 //! Disk-fill protection against the hostile in-process SFTP server (`hostile_server.rs`): a
 //! file streaming past its reported size, a huge reported size, no size at all, growing files,
 //! resume past the cap, and the free-space reserve through a scripted probe.
-#![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

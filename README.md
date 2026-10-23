@@ -5,29 +5,31 @@
 <h1 align="center">Fogu Terminal</h1>
 
 <p align="center">
-  <strong>A native terminal for Linux and macOS with a built-in SSH manager and SFTP browser.</strong><br>
-  Written in Rust. No browser engine, no compromises on your daily workflow.
+  <strong>A native terminal with a built-in SSH manager and SFTP browser.</strong><br>
+  Linux, macOS and Windows (alpha). Written in Rust, no browser engine.
 </p>
 
 <p align="center">
   <img alt="Status: beta" src="https://img.shields.io/badge/status-beta-yellow">
-  <img alt="Linux | macOS" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS-orange">
-  <img alt="Rust" src="https://img.shields.io/badge/rust-1.99-orange">
+  <img alt="Linux | macOS | Windows" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-orange">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-red">
-  <img alt="unsafe: forbidden" src="https://img.shields.io/badge/unsafe-forbidden-red">
 </p>
 
----
+## What it is
 
-> **Fogu is in beta.** It is used daily, but expect rough edges and breaking changes to the
-> configuration format before 1.0. Bug reports and feedback are very welcome.
+A terminal for people who live on remote servers. Click a host in the sidebar and you are in a
+shell; open the SFTP panel and you browse the same machine on the same connection, already in the
+directory your shell is in. It reads your `~/.ssh/config`, keeps passwords in the system keyring
+and starts in about a tenth of a second. *Fogu* means *fire* in Sardinian.
 
-## Screenshots
+> **Beta:** used daily, but expect rough edges and config changes before 1.0.
 
 <p align="center">
   <img src="docs/screenshots/welcome.png" alt="Start page with quick connect, recent hosts and shortcuts" width="860">
 </p>
-<p align="center"><em>Start page: a second window opens here, clean, while the first one keeps your tabs.</em></p>
+
+<details>
+<summary><b>More screenshots</b></summary>
 
 <p align="center">
   <img src="docs/screenshots/ssh-manager.png" alt="Profiles sidebar with groups, live status dots and hosts from ~/.ssh/config" width="860">
@@ -64,66 +66,9 @@
 </p>
 <p align="center"><em>Settings (<code>Ctrl+,</code>): changes apply live to every tab.</em></p>
 
-## Why Fogu
-
-Most terminals that ship a decent SSH manager are web apps in disguise: a few hundred megabytes of
-browser engine to draw a grid of characters. The native alternatives are fast, but leave you
-juggling `~/.ssh/config`, a separate SFTP client and a password manager.
-
-Fogu is the terminal built for people who live on remote servers. Open the sidebar, click a host,
-and you are in a shell. Open the SFTP panel and you are browsing the same machine, on the same
-connection, already in the directory your shell is in. Everything starts in about a tenth of a
-second and stays out of your way.
-
-*Fogu* means *fire* in Sardinian.
-
-## Features
-
-### Terminal
-- GPU rendering with [iced](https://iced.rs) (wgpu), automatic CPU fallback for broken drivers and VMs
-- Terminal emulation by [`alacritty_terminal`](https://github.com/alacritty/alacritty): fast, correct, battle-tested
-- Tabs with rename, colour and backgrounds (colour or image); split panes, resizable with the mouse
-- Drag and drop for tabs, panes and profiles; maximize, equalize and resize from the keyboard
-- Scrollback, mouse selection, copy to PRIMARY and CLIPBOARD, safe multi-line paste
-- Mouse reporting for TUI apps, with Shift to override
-- Clickable links: OSC 8 hyperlinks plus detected URLs and paths, behind a scheme allow-list
-- Context menus everywhere, configurable right-click behaviour
-- Tab recovery: layout and recent scrollback come back after a restart (opt-out). A second
-  window opened while Fogu runs starts clean on the start page and leaves the saved tabs alone
-- Start page with quick connect, recent hosts and the usual shortcuts
-- Settings page: colour scheme gallery, fonts, cursor, terminal, sidebar, SFTP and recovery
-  options, applied live and written to `config.toml`
-- Built-in schemes: Fogu Dark, Fogu Light, Solarized Dark, Dracula, Nocturne, Catppuccin Mocha;
-  fonts, cursor and every key binding configurable
-
-### SSH manager
-- Sidebar with groups, search and quick connect (`user@host:port`)
-- Reads your `~/.ssh/config` live (Host, HostName, User, Port, IdentityFile, ProxyJump,
-  ProxyCommand, HostKeyAlias…) — no import step, nothing duplicated
-- Profile page that edits `config.toml` in place, keeping your comments and writing only the
-  values you change: groups, icon, tab colour, background, authentication, network, scripts
-- Password, public key, ssh-agent and keyboard-interactive authentication
-- Strict `known_hosts` checking: a changed host key is never accepted silently
-- Jump hosts, proxy commands, SOCKS5 and HTTP proxies — a proxied profile never falls back to a
-  direct connection
-- Port forwarding: local, remote and dynamic (SOCKS5), managed live from a dialog
-- Agent and X11 forwarding (off by default, clearly flagged when on)
-- Connection reuse: tabs, splits and SFTP for the same host share one SSH connection
-- Passwords and key passphrases stored in the desktop keyring (Secret Service, or the Keychain
-  on macOS), never on disk
-- Login scripts, starting directory, remembered directory, automatic reconnect with backoff
-
-### SFTP browser
-- Side panel on the same SSH connection: no second login
-- Follows the shell's working directory as you `cd`
-- Upload, download, drag and drop, rename, delete, new folder, permissions
-- Transfers with progress, cancel and resume
-- Hardened against hostile servers: sanitised names, disk-fill protection, downloaded files never
-  executable, nothing is ever launched from a remote listing
+</details>
 
 ## Install
-
-Linux (X11 and Wayland), macOS (Apple Silicon and Intel) and Windows 10/11 (alpha). No root needed.
 
 ### Linux
 
@@ -201,7 +146,8 @@ To remove it, delete that folder.
 
 </details>
 
-### From source
+<details>
+<summary><b>From source, and uninstall</b></summary>
 
 ```bash
 git clone https://github.com/Revdep/Fogu.git
@@ -226,13 +172,72 @@ and on macOS:
 xcode-select --install
 ```
 
-### Uninstall
+**Uninstall** (Linux and macOS):
 
 ```bash
 ./scripts/install.sh --uninstall
 ```
 
-## Configuration
+</details>
+
+## Features
+
+<details>
+<summary><b>Terminal</b></summary>
+
+- GPU rendering with [iced](https://iced.rs) (wgpu), automatic CPU fallback for broken drivers and VMs
+- Terminal emulation by [`alacritty_terminal`](https://github.com/alacritty/alacritty): fast, correct, battle-tested
+- Tabs with rename, colour and backgrounds (colour or image); split panes, resizable with the mouse
+- Drag and drop for tabs, panes and profiles; maximize, equalize and resize from the keyboard
+- Scrollback, mouse selection, copy to PRIMARY and CLIPBOARD, safe multi-line paste
+- Mouse reporting for TUI apps, with Shift to override
+- Clickable links: OSC 8 hyperlinks plus detected URLs and paths, behind a scheme allow-list
+- Context menus everywhere, configurable right-click behaviour
+- Tab recovery: layout and recent scrollback come back after a restart (opt-out). A second
+  window opened while Fogu runs starts clean on the start page and leaves the saved tabs alone
+- Start page with quick connect, recent hosts and the usual shortcuts
+- Settings page: colour scheme gallery, fonts, cursor, terminal, sidebar, SFTP and recovery
+  options, applied live and written to `config.toml`
+- Built-in schemes: Fogu Dark, Fogu Light, Solarized Dark, Dracula, Nocturne, Catppuccin Mocha;
+  fonts, cursor and every key binding configurable
+
+</details>
+
+<details>
+<summary><b>SSH manager</b></summary>
+
+- Sidebar with groups, search and quick connect (`user@host:port`)
+- Reads your `~/.ssh/config` live (Host, HostName, User, Port, IdentityFile, ProxyJump,
+  ProxyCommand, HostKeyAlias…) — no import step, nothing duplicated
+- Profile page that edits `config.toml` in place, keeping your comments and writing only the
+  values you change: groups, icon, tab colour, background, authentication, network, scripts
+- Password, public key, ssh-agent and keyboard-interactive authentication
+- Strict `known_hosts` checking: a changed host key is never accepted silently
+- Jump hosts, proxy commands, SOCKS5 and HTTP proxies — a proxied profile never falls back to a
+  direct connection
+- Port forwarding: local, remote and dynamic (SOCKS5), managed live from a dialog
+- Agent and X11 forwarding (off by default, clearly flagged when on)
+- Connection reuse: tabs, splits and SFTP for the same host share one SSH connection
+- Passwords and key passphrases stored in the system keyring (Secret Service, Keychain,
+  Credential Manager), never on disk
+- Login scripts, starting directory, remembered directory, automatic reconnect with backoff
+
+</details>
+
+<details>
+<summary><b>SFTP browser</b></summary>
+
+- Side panel on the same SSH connection: no second login
+- Follows the shell's working directory as you `cd`
+- Upload, download, drag and drop, rename, delete, new folder, permissions
+- Transfers with progress, cancel and resume
+- Hardened against hostile servers: sanitised names, disk-fill protection, downloaded files never
+  executable, nothing is ever launched from a remote listing
+
+</details>
+
+<details>
+<summary><b>Configuration and keys</b></summary>
 
 Fogu works with no configuration. To customise it, edit `~/.config/fogu/config.toml`:
 
@@ -249,8 +254,6 @@ user = "me"
 ```
 
 Hosts from `~/.ssh/config` appear in the sidebar automatically.
-
-### Default keys
 
 | Action | Linux | macOS |
 |---|---|---|
@@ -269,67 +272,16 @@ Hosts from `~/.ssh/config` appear in the sidebar automatically.
 Every action can be rebound under `[hotkeys]`. `Cmd` and `Option` are accepted as modifier
 names on every system (the same keys as `Meta` and `Alt`); macOS shows them that way.
 
-### Command line
-
 ```
 fogu [--config-dir PATH] [--software-render] [--no-recovery]
 ```
 
-## Under the hood
+</details>
 
-Fogu is a Cargo workspace of five crates with one owner per concern:
+## Contributing and license
 
-| Crate | Role |
-|---|---|
-| `fogu-term` | Terminal state over `alacritty_terminal`, input encoding, OSC parsing, links |
-| `fogu-session` | Local PTY and SSH sessions on Tokio: `russh`, SFTP, forwarding, proxies, keyring |
-| `fogu-core` | Config, profiles, `~/.ssh/config` parsing, key map, colour schemes, split tree |
-| `fogu-ui` | The iced application: tabs, panes, sidebar, SFTP panel, dialogs |
-| `fogu` | The binary: command line, logging, crash log |
-
-Design choices:
-
-- **Pure Rust, no C crypto.** SSH via [`russh`](https://github.com/Eugeny/russh) on `ring`;
-  `unsafe_code = "forbid"` for the whole workspace.
-- **Remote text is attacker input.** Everything a server sends — terminal output, file names,
-  banners, error messages — is sanitised before it reaches the UI or the logs.
-- **Secrets stay secret.** Passwords live in `secrecy` types, never in messages, logs or errors,
-  and are stored only in the desktop keyring.
-- **Supply chain gate.** `cargo deny` checks advisories, licences and sources on every build; no
-  vulnerability advisory is ever ignored.
-- **Tested against the real thing.** Integration tests start a throwaway OpenSSH `sshd` and an
-  in-process hostile SFTP server; parsers are fuzzed.
-
-## Development
-
-```bash
-./scripts/check.sh    # fmt, clippy -D warnings, fuzz build, nextest, doc tests, cargo deny
-cargo run             # debug build
-```
-
-The SSH integration tests need `sshd`, `ssh-keygen`, `ssh-agent` and `ssh-add`; without them they
-are skipped.
-
-## Contributing
-
-Fogu is open to contributions: bug reports, ideas, documentation and code are all welcome.
-
-- **Bugs and ideas:** open an [issue](https://github.com/Revdep/Fogu/issues) with steps to
-  reproduce, your distribution and desktop (X11 or Wayland), or your macOS version.
-- **Code:** fork, branch, and open a pull request. Keep changes focused, add a test for new
-  logic, and make sure `./scripts/check.sh` passes.
-- **Security issues:** please report them privately through
-  [GitHub security advisories](https://github.com/Revdep/Fogu/security/advisories/new) rather
-  than a public issue.
-
-## Acknowledgements
-
-Fogu was inspired by [Tabby](https://github.com/Eugeny/tabby) and by many other terminals that
-showed what a modern terminal can be. It stands on the shoulders of
-[Alacritty](https://github.com/alacritty/alacritty), [iced](https://iced.rs),
-[russh](https://github.com/Eugeny/russh) and [Tokio](https://tokio.rs). Third-party notices are in
+Issues and pull requests are welcome; `./scripts/check.sh` must pass. Report security problems
+privately through [GitHub security advisories](https://github.com/Revdep/Fogu/security/advisories/new).
+Fogu is [MIT](LICENSE)-licensed and builds on [Alacritty](https://github.com/alacritty/alacritty),
+[iced](https://iced.rs) and [russh](https://github.com/Eugeny/russh); third-party notices are in
 [`THIRD_PARTY_LICENSES`](THIRD_PARTY_LICENSES).
-
-## License
-
-[MIT](LICENSE)

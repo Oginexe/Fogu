@@ -52,6 +52,8 @@ pub(crate) struct Shared {
 }
 
 /// Locks the shared state, recovering from poisoning (the data stays consistent: plain pushes).
+/// Lock order: taken while `term` is locked (alacritty calls the proxy mid-parse), so never lock
+/// `term` while holding this one.
 pub(crate) fn lock(shared: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
     shared.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -114,12 +116,20 @@ impl EventListener for EventProxy {
     }
 }
 
-/// Strips control characters (C0, DEL, C1) and caps the length at [`TITLE_MAX_CHARS`].
+/// [`sanitize_remote`] for a window title, capped at [`TITLE_MAX_CHARS`].
 pub fn sanitize_title(title: &str) -> String {
-    title
-        .chars()
-        .filter(|c| !c.is_control())
-        .take(TITLE_MAX_CHARS)
+    sanitize_remote(title, TITLE_MAX_CHARS, false)
+}
+
+/// Makes server-supplied text safe to show: drops control characters (C0 except `\n` when
+/// `keep_newlines`, DEL, C1) and bidi overrides/isolates (U+202A–202E, U+2066–2069, which can
+/// make a prompt read differently than it is), then caps it at `max_chars`.
+#[must_use]
+pub fn sanitize_remote(text: &str, max_chars: usize, keep_newlines: bool) -> String {
+    text.chars()
+        .filter(|&c| (keep_newlines && c == '\n') || !c.is_control())
+        .filter(|c| !matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'))
+        .take(max_chars)
         .collect()
 }
 
@@ -169,6 +179,10 @@ pub fn default_palette() -> Box<Palette> {
                 }
             }
             232..256 => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "i is in 232..256, so at most 23"
+                )]
                 let v = 8 + 10 * (i - 232) as u8;
                 Rgb { r: v, g: v, b: v }
             }
@@ -190,6 +204,13 @@ pub fn default_palette() -> Box<Palette> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn titles_lose_controls_and_bidi_overrides() {
+        // RLO would show `exe.gol` as `log.exe` in the tab bar.
+        assert_eq!(sanitize_title("\u{202e}exe.gol\u{7}"), "exe.gol");
+        assert_eq!(sanitize_title("a\u{2066}b\u{2069}"), "ab");
+    }
 
     fn proxy() -> (EventProxy, Arc<Mutex<Shared>>) {
         let shared = Arc::new(Mutex::new(Shared {
