@@ -275,6 +275,27 @@ names on every system (the same keys as `Meta` and `Alt`); macOS shows them that
 fogu [--config-dir PATH] [--software-render] [--no-recovery]
 ```
 
+## Security
+
+| What | Linux and macOS | Windows |
+|---|---|---|
+| `config.toml`, Fogu's `known_hosts` | `~/.config/fogu/` | `%APPDATA%\fogu\` |
+| Logs, crash log, saved tabs and scrollback | `~/.local/state/fogu/` | `%LOCALAPPDATA%\fogu\` |
+
+- **Private files.** Directories are `0700` and files `0600`; on Windows they get an access list
+  for you and SYSTEM only, also with `--config-dir` in a shared folder.
+- **Passwords** are stored only in the system keyring (Secret Service, Keychain, Credential
+  Manager), never in a file. Without a keyring, Fogu asks each time.
+- **Saved scrollback** is plain text on disk, readable only by you, and may hold anything the
+  terminal showed. Turn it off with `restore_scrollback = false` under `[recovery]`, or per
+  profile.
+- **Host keys.** An unknown key asks; a changed key refuses the connection unless you choose to
+  replace it. `~/.ssh/known_hosts` is read, never written.
+- **Output can't drive your machine.** Links open only on Ctrl+click, files only from local panes
+  and never executables or network paths; clipboard reads (OSC 52) are refused; pasted text loses
+  escape and control characters.
+- **Verify a download** with `SHA256SUMS` or `gh attestation verify <file> -R Revdep/Fogu`.
+
 ## Under the hood
 
 Fogu is a Cargo workspace of five crates with one owner per concern:
@@ -290,7 +311,8 @@ Fogu is a Cargo workspace of five crates with one owner per concern:
 Design choices:
 
 - **Pure Rust, no C crypto.** SSH via [`russh`](https://github.com/Eugeny/russh) on `ring`;
-  `unsafe_code = "forbid"` for the whole workspace.
+  `unsafe` is denied workspace-wide, except one small Windows-only module (file permissions and
+  the SSH agent pipe owner) where every block documents why it is sound.
 - **Remote text is attacker input.** Everything a server sends — terminal output, file names,
   banners, error messages — is sanitised before it reaches the UI or the logs.
 - **Secrets stay secret.** Passwords live in `secrecy` types, never in messages, logs or errors,
