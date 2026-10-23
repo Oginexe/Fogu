@@ -482,7 +482,18 @@ fn missing_file_is_empty_and_changes_are_noticed() {
     assert!(config.changed(), "mtime changed");
 
     let config = SshConfig::load(&path, &env);
+    let dir = env.home.join(".ssh/conf.d");
+    let dir_mtime = std::fs::metadata(&dir).unwrap().modified().unwrap();
     write(&env, "conf.d/new", "Host two\n");
+    // Directory times can lag (Windows) or be coarse: a new entry must count on its own.
+    std::fs::File::open(&dir)
+        .unwrap()
+        .set_modified(dir_mtime)
+        .unwrap();
+    assert_eq!(
+        std::fs::metadata(&dir).unwrap().modified().unwrap(),
+        dir_mtime
+    );
     assert!(config.changed(), "new file in a globbed directory");
     assert_eq!(SshConfig::load(&path, &env).aliases(), ["two", "one"]);
 }

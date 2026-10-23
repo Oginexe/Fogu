@@ -199,9 +199,16 @@ impl SshConfig {
     }
 }
 
+/// Modification time and size of a file; for a globbed directory, its number of entries instead
+/// of a size (always 0 on Windows, fixed on ext4), as its time can lag behind a new file.
 fn stamp(path: &Path) -> Option<(SystemTime, u64)> {
     let meta = std::fs::metadata(path).ok()?;
-    Some((meta.modified().ok()?, meta.len()))
+    let size = if meta.is_dir() {
+        std::fs::read_dir(path).ok()?.count() as u64
+    } else {
+        meta.len()
+    };
+    Some((meta.modified().ok()?, size))
 }
 
 struct Loader<'a> {
