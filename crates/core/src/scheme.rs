@@ -77,7 +77,7 @@ impl<'de> Deserialize<'de> for RgbColor {
 }
 
 /// Foreground/background/cursor/selection plus the 16 ANSI colours (0–7 normal, 8–15 bright).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ColorScheme {
     /// Display name, matched by [`ColorScheme::by_name`] and `Config.appearance.color_scheme`.
     pub name: String,

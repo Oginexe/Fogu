@@ -624,7 +624,7 @@ impl App {
             .runtime
             .handle()
             .spawn(async move { tokio::time::sleep(delay).await });
-        Task::perform(timer, move |_| message.clone())
+        Task::perform(timer, move |_| message)
     }
 }
 

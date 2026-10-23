@@ -194,12 +194,12 @@ fn broken_config_file_is_kept_and_reported_once_per_change() {
     let _ = app.reload_config_if_changed();
 
     assert_eq!(app.config, before);
-    let errors: Vec<_> = app
+    let errors = app
         .toasts
         .iter()
         .filter(|note| note.level == Level::Error && note.title == "Config change not applied")
-        .collect();
-    assert_eq!(errors.len(), 1);
+        .count();
+    assert_eq!(errors, 1);
 }
 
 #[test]

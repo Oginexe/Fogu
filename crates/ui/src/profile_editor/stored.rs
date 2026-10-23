@@ -203,7 +203,7 @@ impl App {
 #[cfg(feature = "ssh")]
 impl App {
     /// Looks up the password and every key's passphrase of editor `tab`.
-    pub(crate) fn store_query(&mut self, tab: TabId) -> Task<Message> {
+    pub(crate) fn store_query(&self, tab: TabId) -> Task<Message> {
         let defaults = self.config.profile_defaults.ssh.clone();
         let Some(editor) = self
             .tabs

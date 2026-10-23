@@ -149,6 +149,7 @@ todo = "warn"
 dbg_macro = "warn"
 print_stdout = "warn"
 undocumented_unsafe_blocks = "deny"
+redundant_clone = "warn"
 # pedantic noise we accept:
 module_name_repetitions = "allow"
 must_use_candidate = "allow"

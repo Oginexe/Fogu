@@ -378,7 +378,7 @@ impl App {
                 tab,
                 PanelMsg::DownloadPicked {
                     remote_dir: remote_dir.clone(),
-                    remote: remote.clone(),
+                    remote,
                     local_dir: folder.map(|f| f.path().to_path_buf()),
                 },
             )
@@ -437,12 +437,6 @@ fn pick_upload(tab: TabId, remote_dir: Option<String>) -> Task<Message> {
     Task::perform(dialog.pick_files(), move |files| {
         let local: Option<Vec<PathBuf>> =
             files.map(|f| f.iter().map(|h| h.path().to_path_buf()).collect());
-        panel_msg(
-            tab,
-            PanelMsg::UploadPicked {
-                remote_dir: remote_dir.clone(),
-                local,
-            },
-        )
+        panel_msg(tab, PanelMsg::UploadPicked { remote_dir, local })
     })
 }

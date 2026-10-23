@@ -287,7 +287,7 @@ impl App {
             Task::perform(job, move |joined| {
                 let result = joined
                     .unwrap_or_else(|_| Err(LoadError::Corrupt("the decoder crashed".to_owned())));
-                BgMsg::Loaded(key.clone(), result).into()
+                BgMsg::Loaded(key, result).into()
             })
         }))
     }

@@ -172,7 +172,7 @@ fn a_forwarded_agent_answers_on_the_server() {
     sshd.trust();
     let mut ssh = sshd.profile();
     ssh.agent_forward = true;
-    ssh.agent_path = Some(agent.socket.clone());
+    ssh.agent_path = Some(agent.socket);
     let mut client: TestClient = Client::connect(&ssh, sshd.paths(), no_prompts);
     let warning = client.until(|e| matches!(e, SessionOutput::Warning(_)));
     assert!(

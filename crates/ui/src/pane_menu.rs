@@ -230,7 +230,7 @@ impl App {
         .map(|e| {
             ui(
                 e.profile.name.clone(),
-                Message::Profiles(ProfilesMsg::RowOpen(e.profile.id.clone(), Launch::Tab)),
+                Message::Profiles(ProfilesMsg::RowOpen(e.profile.id, Launch::Tab)),
             )
         })
         .collect()

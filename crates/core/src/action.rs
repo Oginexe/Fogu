@@ -261,7 +261,7 @@ impl<'de> Deserialize<'de> for Action {
 
 /// The config's `hotkeys` table: one or more chords per action, plus a chord → action reverse
 /// index built once.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Hotkeys {
     bindings: BTreeMap<Action, Vec<KeyChord>>,
     reverse: HashMap<KeyChord, Action>,

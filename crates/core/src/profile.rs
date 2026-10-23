@@ -222,7 +222,7 @@ pub struct ProfileDefaults {
 }
 
 /// A profile with every option resolved to a concrete value, ready to open a session.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[expect(
     clippy::large_enum_variant,
     reason = "built once per opened tab and moved into the session task"

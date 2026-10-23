@@ -70,7 +70,7 @@ pub enum Section {
 }
 
 /// One line of the sidebar list.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Line {
     Header {
         section: Section,

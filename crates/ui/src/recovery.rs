@@ -357,7 +357,7 @@ impl App {
     }
 
     /// Every pane closed (the last tab went away): nothing to restore next time.
-    pub(crate) fn forget_session(&mut self) {
+    pub(crate) fn forget_session(&self) {
         if let Some(recovery) = &self.recovery
             && let Err(err) = recovery::clear(&recovery.dir)
         {

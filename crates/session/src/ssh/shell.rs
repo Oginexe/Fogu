@@ -151,7 +151,7 @@ async fn shell(
 async fn open_channel(
     lease: &Lease,
     ssh: &EffectiveSsh,
-    ui: &mut Ui,
+    ui: &Ui,
     ready: Duration,
 ) -> Result<russh::Channel<russh::client::Msg>, Stop> {
     let shared = lease.shared();

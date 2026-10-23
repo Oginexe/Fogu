@@ -165,7 +165,7 @@ fn learn_writes_0600_openssh_lines_and_lookup_finds_them() {
         text,
         format!("host.example ssh-ed25519 {KEY_A}\n[host.example]:2200 ssh-ed25519 {KEY_B}\n")
     );
-    let files = [path.clone()];
+    let files = [path];
     assert_eq!(
         lookup(&files, "host.example", 22, &key(KEY_A)),
         Lookup::Known
@@ -211,7 +211,7 @@ fn hostile_host_names_are_written_hashed() {
     );
     // Hashed `[host]:port`: the port is part of the hashed name.
     learn(&path, "odd host", 2222, &key(KEY_B)).unwrap();
-    let files = [path.clone()];
+    let files = [path];
     assert_eq!(lookup(&files, "odd host", 2222, &key(KEY_B)), Lookup::Known);
     assert_eq!(lookup(&files, "odd host", 22, &key(KEY_B)), Lookup::Unknown);
     std::fs::remove_dir_all(&dir).unwrap();
