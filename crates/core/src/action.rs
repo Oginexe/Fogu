@@ -480,7 +480,6 @@ impl<'de> Deserialize<'de> for Hotkeys {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 

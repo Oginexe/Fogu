@@ -312,7 +312,6 @@ pub fn effective_osc52_write(profile: &Profile, global_default: Osc52Policy) -> 
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
     use super::*;
 

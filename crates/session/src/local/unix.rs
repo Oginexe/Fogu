@@ -471,7 +471,6 @@ mod tests {
     /// running meanwhile (one thread, so a blocking call would starve the spawned task).
     #[cfg(target_os = "macos")]
     #[test]
-    #[expect(clippy::unwrap_used, reason = "test")]
     fn macos_lookups_do_not_block_the_runtime() {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, Ordering};

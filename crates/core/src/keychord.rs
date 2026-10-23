@@ -259,12 +259,7 @@ impl<'de> Deserialize<'de> for KeyChord {
 
 #[cfg(test)]
 mod tests {
-    #![expect(
-        clippy::unwrap_used,
-        clippy::panic,
-        clippy::fn_params_excessive_bools,
-        reason = "tests"
-    )]
+    #![expect(clippy::fn_params_excessive_bools, reason = "tests")]
 
     use super::*;
 

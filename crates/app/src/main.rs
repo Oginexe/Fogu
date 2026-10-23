@@ -172,7 +172,6 @@ fn state_dir() -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     #[test]
-    #[expect(clippy::unwrap_used, reason = "tests")]
     fn the_log_rotates_past_its_limit_and_old_daily_files_go() {
         use std::io::Write as _;
 

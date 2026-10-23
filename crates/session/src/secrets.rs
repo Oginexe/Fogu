@@ -438,7 +438,6 @@ impl Secrets {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     #[cfg(target_os = "macos")]
     use secrecy::ExposeSecret as _;

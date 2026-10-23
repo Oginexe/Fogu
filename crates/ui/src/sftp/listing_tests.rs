@@ -1,5 +1,3 @@
-#![expect(clippy::unwrap_used, reason = "tests")]
-
 use super::*;
 
 fn entry(name: &str, kind: EntryKind, size: u64, mtime: u32) -> Entry {

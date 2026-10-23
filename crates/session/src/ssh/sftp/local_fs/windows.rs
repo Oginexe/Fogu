@@ -220,7 +220,6 @@ pub(crate) fn available_space(dir: &DirHandle) -> io::Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 

@@ -123,7 +123,6 @@ fn find_in(paths: &OsStr, name: &str) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 

@@ -1,5 +1,3 @@
-#![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
-
 use fogu_session::sftp::{CmdId, Failed, Skipped};
 
 use super::*;

@@ -131,7 +131,6 @@ fn windows_profiles() -> Vec<Profile> {
 
 #[cfg(all(test, unix))]
 mod tests {
-    #![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
     use std::os::unix::fs::symlink;
     use std::path::PathBuf;

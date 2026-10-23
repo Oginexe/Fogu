@@ -3,7 +3,6 @@
 //! the caps and a server on which every name "exists". Asserted: writes land only below the
 //! destination, bad names are skipped and reported, nothing is deleted on a refused tree, no panic
 //! anywhere.
-#![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
 use std::path::Path;
 use std::sync::Arc;

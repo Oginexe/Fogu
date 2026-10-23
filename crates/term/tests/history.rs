@@ -1,5 +1,4 @@
 //! Scrollback capture/restore as inert runs: round trip, inert restore, validation.
-#![expect(clippy::unwrap_used, reason = "tests")]
 
 use fogu_term::history::{
     HistoryError, MAX_BYTES, Run, SavedColor, SavedHistory, SavedRow, VERSION, flag, validate,

@@ -297,7 +297,6 @@ impl Default for Config {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
     use super::*;
     use crate::action::Action;

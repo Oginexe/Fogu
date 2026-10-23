@@ -59,7 +59,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use tokio::io::duplex;
 

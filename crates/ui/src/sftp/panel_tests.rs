@@ -1,6 +1,5 @@
 //! Reducer tests: `SftpPanelState` against a plain command channel, and the panel inside a
 //! headless `App` with an SSH stub session.
-#![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
 use std::sync::Arc;
 use std::time::Instant;

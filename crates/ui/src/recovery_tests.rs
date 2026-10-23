@@ -1,5 +1,3 @@
-#![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
-
 use std::path::PathBuf;
 use std::sync::Arc;
 

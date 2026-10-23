@@ -159,7 +159,6 @@ fn temp_sibling(path: &Path) -> io::Result<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 

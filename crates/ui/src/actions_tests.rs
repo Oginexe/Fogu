@@ -1,5 +1,4 @@
 //! Reducer tests on a headless `App` whose panes use stub sessions (no process, no window).
-#![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
 use std::sync::Arc;
 

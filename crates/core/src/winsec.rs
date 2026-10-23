@@ -217,7 +217,6 @@ fn trusted_owner(owner: PSID, user: PSID) -> bool {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use windows_sys::Win32::Security::Authorization::GetNamedSecurityInfoW;
     use windows_sys::Win32::Security::{

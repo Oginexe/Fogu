@@ -114,7 +114,6 @@ async fn read_port<S: AsyncRead + Unpin>(stream: &mut S) -> std::io::Result<u16>
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use tokio::io::duplex;
 

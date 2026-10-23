@@ -136,7 +136,6 @@ pub fn reexec_for_software_render(cli: &Cli) {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 

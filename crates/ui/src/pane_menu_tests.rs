@@ -1,5 +1,3 @@
-#![expect(clippy::unwrap_used, reason = "tests")]
-
 use std::sync::Arc;
 
 use fogu_core::config::RightClickAction;

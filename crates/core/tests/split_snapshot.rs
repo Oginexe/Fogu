@@ -1,6 +1,5 @@
 //! Serde round-trip of a `SplitTree` through TOML. The snapshot doubles as the recovery-format
 //! reference.
-#![expect(clippy::expect_used, reason = "tests")]
 
 use fogu_core::{Side, SplitTree};
 

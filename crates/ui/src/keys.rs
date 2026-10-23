@@ -200,7 +200,6 @@ fn named_key(named: Named, numpad: bool) -> Option<KeyCode> {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 

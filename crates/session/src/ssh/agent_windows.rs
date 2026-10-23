@@ -116,7 +116,6 @@ async fn try_connect(path: &Path) -> Option<Agent> {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use tokio::net::windows::named_pipe::ServerOptions;
 

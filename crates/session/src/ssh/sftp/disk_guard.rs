@@ -174,7 +174,6 @@ impl Every {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::super::local_fs::LocalDir;
     use super::*;

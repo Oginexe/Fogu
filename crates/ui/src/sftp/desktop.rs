@@ -386,7 +386,6 @@ fn portal_installed() -> bool {
 
 #[cfg(all(test, windows))]
 mod windows_tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::refuse_open;
 
@@ -426,7 +425,6 @@ mod windows_tests {
 
 #[cfg(all(test, unix))]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use std::os::unix::fs::PermissionsExt as _;
 

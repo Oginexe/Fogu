@@ -1,5 +1,3 @@
-#![expect(clippy::unwrap_used, reason = "tests")]
-
 use fogu_core::Action;
 use fogu_core::config::{CursorShapeCfg, load};
 

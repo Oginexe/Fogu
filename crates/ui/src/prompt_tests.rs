@@ -1,6 +1,5 @@
 //! Reducer tests for the SSH UI: prompt dialogs, host-key decisions, close confirmation,
 //! reconnect, warnings and the profile picker, on a headless `App` with stub sessions.
-#![expect(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
 use std::sync::Arc;
 

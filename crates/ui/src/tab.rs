@@ -458,7 +458,6 @@ pub fn resolve_title<'a>(
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unwrap_used, reason = "tests")]
 
     use super::*;
 
