@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6 (2026-10-23)
 
 ### Security
 - Windows: network (UNC) paths in links and in the working directory a program reports are never
