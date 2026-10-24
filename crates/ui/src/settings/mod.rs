@@ -16,6 +16,7 @@ use std::str::FromStr;
 
 use fogu_core::config::{CursorShapeCfg, ProfileClick, RightClickAction};
 use fogu_core::{ColorScheme, Config, Osc52Policy};
+use iced::widget::text_editor;
 
 use crate::forms::FieldValue;
 
@@ -32,18 +33,21 @@ pub enum Page {
     Sftp,
     Ssh,
     Recovery,
+    /// `config.toml` as text.
+    File,
     Updates,
     Licenses,
 }
 
 impl Page {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Appearance,
         Self::Terminal,
         Self::Sidebar,
         Self::Sftp,
         Self::Ssh,
         Self::Recovery,
+        Self::File,
         Self::Updates,
         Self::Licenses,
     ];
@@ -59,6 +63,7 @@ impl Page {
             Self::Licenses => ("About / Licenses", "Bundled third-party licenses"),
             Self::Updates => ("Updates", "Optional updates and release notes"),
             Self::Recovery => ("Tab recovery", "Restore tabs on restart"),
+            Self::File => ("config.toml", "Every key, as text"),
         }
     }
 }
@@ -155,6 +160,12 @@ pub struct Settings {
     pub no_picker: Option<&'static str>,
     /// The SSH scrollback toggle waits for its explanation modal.
     pub pending_ssh_recovery: bool,
+    /// The config.toml page: the text being edited, as read when the page opened.
+    pub file: text_editor::Content,
+    /// The file's text when it was read or saved (the editor differs = unsaved changes).
+    pub file_saved: String,
+    /// Why the last Save was refused.
+    pub file_error: Option<String>,
 }
 
 impl Settings {

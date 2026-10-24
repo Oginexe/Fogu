@@ -222,7 +222,8 @@ xcode-select --install
   window opened while Fogu runs starts clean on the start page and leaves the saved tabs alone
 - Start page with quick connect, recent hosts and the usual shortcuts
 - Settings page: colour scheme gallery, fonts, cursor, terminal, sidebar, SFTP and recovery
-  options, applied live and written to `config.toml`
+  options, applied live and written to `config.toml`; and the whole `config.toml` as text, saved
+  only when it loads
 - Built-in schemes: Fogu Dark, Fogu Light, Solarized Dark, Dracula, Nocturne, Catppuccin Mocha;
   fonts, cursor and every key binding configurable
 

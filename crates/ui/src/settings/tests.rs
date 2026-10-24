@@ -326,3 +326,45 @@ fn updater_toast_opens_updates_without_downloading() {
     assert!(!app.update_busy());
     assert!(app.toasts.get(id).is_none());
 }
+
+#[test]
+fn the_config_file_page_saves_only_text_that_loads_and_applies_it() {
+    use iced::widget::text_editor::Content;
+
+    fn page(app: &mut App) -> &mut super::Settings {
+        app.tabs
+            .iter_mut()
+            .find_map(|tab| tab.settings.as_deref_mut())
+            .unwrap()
+    }
+    let t = tmp();
+    let mut app = opened(&t);
+    let settings_msg = |app: &mut App, m: SettingsMsg| {
+        let _ = app.update(Message::Settings(m));
+    };
+    settings_msg(&mut app, SettingsMsg::Page(Page::File));
+    let original = file(&t);
+    assert_eq!(page(&mut app).file.text().trim_end(), original.trim_end());
+
+    page(&mut app).file = Content::with_text("[appearance\n");
+    settings_msg(&mut app, SettingsMsg::FileSave);
+    assert!(page(&mut app).file_error.is_some());
+    assert_eq!(
+        file(&t),
+        original,
+        "a file that would not load is not written"
+    );
+
+    let edited = format!("{original}\n[terminal]\nwheel_lines = 9\n");
+    page(&mut app).file = Content::with_text(&edited);
+    settings_msg(&mut app, SettingsMsg::FileSave);
+    assert!(page(&mut app).file_error.is_none());
+    assert!(file(&t).contains("wheel_lines = 9"));
+    assert_eq!(app.config.terminal.wheel_lines, 9, "applied at once");
+    assert_eq!(*app.config, load(&t.0).0);
+
+    // Revert drops unsaved typing.
+    page(&mut app).file = Content::with_text("typing");
+    settings_msg(&mut app, SettingsMsg::FileRevert);
+    assert!(page(&mut app).file.text().contains("wheel_lines = 9"));
+}

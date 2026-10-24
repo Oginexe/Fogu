@@ -2,7 +2,9 @@
 //! form on the right; Appearance leads with a gallery of the colour schemes.
 
 use fogu_core::{ColorScheme, Config};
-use iced::widget::{Row, button, column, container, row, scrollable, space, stack, text};
+use iced::widget::{
+    Row, button, column, container, row, scrollable, space, stack, text, text_editor,
+};
 use iced::{Alignment, Border, Element, Font, Length};
 
 use super::{
@@ -23,6 +25,8 @@ type Form<'a> = Element<'a, Field<FieldId>>;
 const NAV_W: f32 = 200.0;
 /// Widest the form gets, logical px.
 const MAX_W: f32 = 760.0;
+/// Height of the config.toml editor, logical px (the page scrolls; the editor scrolls inside).
+const FILE_EDITOR_H: f32 = 520.0;
 /// Under fields read only when a terminal starts.
 const NEW_TERMINALS: &str = "Applies to terminals opened from now on.";
 /// Under fields read only when the window opens.
@@ -58,6 +62,7 @@ pub fn page<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Element<'a, Message> {
         Page::Sftp => field(sftp(s, cx)),
         Page::Ssh => field(ssh(cx)),
         Page::Recovery => field(recovery(s, cx)),
+        Page::File => file_page(s, look),
         Page::Updates => crate::updater::view(cx.updater, look),
         // The crate notices are ~500 KB: one text widget that size stalls the UI thread.
         Page::Licenses => licenses(look),
@@ -113,6 +118,7 @@ fn nav<'a>(current: Page, cx: &Ctx<'a>) -> Element<'a, Message> {
             Page::Ssh => Icon::Key,
             Page::Recovery | Page::Licenses => Icon::History,
             Page::Updates => Icon::Download,
+            Page::File => Icon::FileCode,
         };
         rows = rows.push(forms::nav_item(
             look,
@@ -777,6 +783,40 @@ fn recovery<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Form<'a> {
         ),
     ];
     forms::section(look, "Tab recovery", rows)
+}
+
+/// `config.toml` as text: Save writes it only when it loads (the error otherwise), Revert reads
+/// the file again.
+fn file_page(s: &Settings, look: Look) -> Element<'_, Message> {
+    let edit = |action| Message::Settings(SettingsMsg::FileEdit(action));
+    let changed = s.file.text() != s.file_saved;
+    let editor = text_editor(&s.file)
+        .on_action(edit)
+        .font(Font::MONOSPACE)
+        .size(13)
+        .height(FILE_EDITOR_H)
+        .padding(10);
+    let buttons = row![
+        button(text("Save").size(13))
+            .style(style::btn(look, style::Btn::Primary))
+            .on_press_maybe(changed.then_some(Message::Settings(SettingsMsg::FileSave))),
+        button(text("Revert").size(13))
+            .style(style::btn(look, style::Btn::Secondary))
+            .on_press_maybe(changed.then_some(Message::Settings(SettingsMsg::FileRevert))),
+    ]
+    .spacing(8);
+    let mut page = column![
+        text("Changes apply when you save, like an edit in another editor. A file that would not load is not saved.")
+            .size(12)
+            .color(look.dim),
+        editor,
+        buttons,
+    ]
+    .spacing(12);
+    if let Some(why) = &s.file_error {
+        page = page.push(text(why.as_str()).size(12).color(ERROR));
+    }
+    page.into()
 }
 
 /// `THIRD_PARTY_LICENSES` (Markdown) as a page: headings, paragraphs and bullets reflowed to the
