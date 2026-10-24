@@ -94,6 +94,7 @@ zipsign-api = { version = "0.2.2", default-features = false }
 semver = { version = "1.0.28", features = ["serde"] }
 # why: updater archives (.tar.gz on Linux, .zip on macOS/Windows); flate2 already comes with russh
 flate2 = "1.1.10"
+tar = { version = "0.4.46", default-features = false }
 zip = { version = "9.1.0", default-features = false, features = ["deflate"] }
 
 [workspace.lints.rust]

@@ -32,6 +32,9 @@ flate2.workspace = true
 zipsign-api = { workspace = true, features = ["verify-zip"] }
 zip.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+zipsign-api = { workspace = true, features = ["verify-tar"] }
+tar.workspace = true
 
 [features]
 default = ["ssh"]

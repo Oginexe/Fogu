@@ -19,7 +19,7 @@ use crate::message::Message;
 use crate::notifications::{Level, Notification, ToastAction};
 
 const MAX_ASSET: u64 = 128 * 1024 * 1024;
-#[cfg(all(debug_assertions, target_os = "linux"))]
+#[cfg(target_os = "linux")]
 const MAX_EXTRACT: u64 = 512 * 1024 * 1024;
 const LATEST: &str = "https://api.github.com/repos/Revdep/Fogu/releases/latest";
 const DOWNLOADS: &str = "https://github.com/Revdep/Fogu/releases/download";
@@ -768,7 +768,7 @@ fn clean_stale(parent: &Path, destination: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(all(debug_assertions, target_os = "linux"))]
+#[cfg(target_os = "linux")]
 fn safe_entry(path: &Path) -> bool {
     !path.as_os_str().is_empty()
         && path
@@ -908,6 +908,7 @@ fn verify_payload(
 }
 
 // Platform strategies are deliberately opt-in, added only after their staging gate.
+#[cfg(not(target_os = "linux"))]
 mod platform {
     use super::{Command, Path, PathBuf, Result, Target, Version};
     pub(super) fn detect(_: PathBuf) -> Result<Target> {
@@ -1356,8 +1357,123 @@ const RELEASE: [&str; 6] = [
     "Fogu-x86_64.AppImage",
 ];
 
+#[cfg(target_os = "linux")]
+mod platform {
+    use super::{
+        Command, File, MAX_EXTRACT, Path, PathBuf, Result, Target, Version, failure, fs,
+        probe_version, safe_entry, swap,
+    };
+    use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+
+    pub(super) fn detect(exe: PathBuf) -> Result<Target> {
+        if std::env::consts::ARCH != "x86_64" {
+            return Err("Use your installation method on this architecture".into());
+        }
+        if let (Some(image), Some(dir)) = (std::env::var_os("APPIMAGE"), std::env::var_os("APPDIR"))
+            && fs::symlink_metadata(&image).is_ok_and(|m| m.is_file())
+            && let (Ok(dir), Ok(image)) = (fs::canonicalize(dir), fs::canonicalize(image))
+            && dir.is_dir()
+            && exe.starts_with(dir)
+        {
+            return Ok(Target {
+                destination: image.clone(),
+                restart: image,
+                asset: "Fogu-linux-appimage-x86_64.tar.gz",
+                entry: "Fogu-x86_64.AppImage",
+            });
+        }
+        if !fs::symlink_metadata(&exe).map_err(failure)?.is_file() {
+            return Err("Unsupported installation".into());
+        }
+        Ok(Target {
+            destination: exe.clone(),
+            restart: exe,
+            asset: "Fogu-linux-x86_64.tar.gz",
+            entry: "Fogu-linux-x86_64/fogu",
+        })
+    }
+    /// Absolute `PATH` entries only: a `curl` in the working directory never runs.
+    pub(super) fn curl() -> Option<PathBuf> {
+        fogu_core::platform::find_in_path("curl")
+    }
+    pub(super) fn quiet_probe(_: &mut Command) {}
+    pub(super) fn preflight(target: &Target) -> Result<()> {
+        let parent = target.destination.parent().ok_or("Invalid installation")?;
+        let meta = fs::metadata(parent).map_err(failure)?;
+        let file = fs::metadata(&target.destination).map_err(failure)?;
+        if meta.mode() & 0o222 == 0 || file.uid() == 0 && !cfg!(debug_assertions) {
+            return Err(
+                "Update using your installation method; this directory is not writable".into(),
+            );
+        }
+        Ok(())
+    }
+    pub(super) fn list_archive(path: &Path) -> Result<()> {
+        let input = flate2::read::GzDecoder::new(File::open(path).map_err(failure)?);
+        let mut archive = tar::Archive::new(input);
+        let mut total = 0u64;
+        let mut count = 0u32;
+        let mut names = std::collections::HashSet::new();
+        // shortcut: Linux rejects extended TAR headers, add bounded metadata parsing if the package layout needs them.
+        for entry in archive.entries().map_err(failure)?.raw(true) {
+            let entry = entry.map_err(failure)?;
+            count += 1;
+            total = total
+                .checked_add(entry.size())
+                .ok_or("Archive is too large")?;
+            let path = entry.path().map_err(failure)?;
+            let kind = entry.header().entry_type();
+            if count > 4096
+                || total > MAX_EXTRACT
+                || !safe_entry(&path)
+                || !(kind.is_file() || kind.is_dir())
+                || !names.insert(path.into_owned())
+            {
+                return Err("Unsafe or oversized archive".into());
+            }
+        }
+        Ok(())
+    }
+    pub(super) fn verify(source: &Path, expected: &Version) -> Result<()> {
+        if !fs::symlink_metadata(source).map_err(failure)?.is_file()
+            || fs::metadata(source).map_err(failure)?.permissions().mode() & 0o111 == 0
+        {
+            return Err("Archive does not contain an executable".into());
+        }
+        if probe_version(source)? != *expected {
+            return Err("Security check failed: executable version".into());
+        }
+        File::open(source)
+            .and_then(|f| f.sync_all())
+            .map_err(failure)
+    }
+    pub(super) fn commit(source: &Path, target: &Target, stage: &Path) -> Result<()> {
+        // shortcut: two same-filesystem renames leave a recoverable backup after a kill, use an upstream atomic exchange when available.
+        swap(source, &target.destination, &stage.join("previous")).map_err(|e| {
+                tracing::error!(%e, backup = %stage.display(), "update commit failed; keep staging for recovery");
+                "Replacement failed; close other windows and retry. A recoverable copy is kept in the .fogu-update directory beside Fogu".to_owned()
+            })?;
+        File::open(target.destination.parent().ok_or("Invalid installation")?)
+            .and_then(|f| f.sync_all())
+            .map_err(failure)
+    }
+}
+
+/// Moves `dest` to `backup` and `source` into its place, putting `dest` back if the second
+/// rename fails. All three share a filesystem (the stage is a sibling of `dest`); a kill between
+/// the renames leaves the old copy at `backup`.
+#[cfg(target_os = "linux")]
+fn swap(source: &Path, dest: &Path, backup: &Path) -> std::io::Result<()> {
+    fs::rename(dest, backup)?;
+    if let Err(e) = fs::rename(source, dest) {
+        fs::rename(backup, dest)?;
+        return Err(e);
+    }
+    Ok(())
+}
+
 /// Checks the zipsign signature of `archive` against `keys`, its file name as the context.
-#[cfg(all(debug_assertions, target_os = "linux"))]
+#[cfg(target_os = "linux")]
 fn signed_by(
     archive: &Path,
     keys: &[[u8; 32]],
@@ -1375,6 +1491,21 @@ fn signed_by(
     )
 }
 
+#[cfg(target_os = "linux")]
+fn verify_signature(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
+    signed_by(archive, keys, |file, keys, context| {
+        zipsign_api::verify::verify_tar(file, keys, Some(context))
+            .map(drop)
+            .map_err(failure)
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn extract(archive: &Path, into: &Path) -> Result<()> {
+    let gzip = flate2::read::GzDecoder::new(File::open(archive).map_err(failure)?);
+    tar::Archive::new(gzip).unpack(into).map_err(failure)
+}
+
 #[cfg(all(debug_assertions, target_os = "linux"))]
 fn zip_signed_by(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
     signed_by(archive, keys, |file, keys, context| {
@@ -1384,10 +1515,12 @@ fn zip_signed_by(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
     })
 }
 
+#[cfg(not(target_os = "linux"))]
 fn verify_signature(_: &Path, _: &[[u8; 32]]) -> Result<()> {
     Err("Unsupported archive".into())
 }
 
+#[cfg(not(target_os = "linux"))]
 fn extract(_: &Path, _: &Path) -> Result<()> {
     Err("Unsupported archive".into())
 }
@@ -1564,6 +1697,33 @@ mod tests {
         assert!(validate(metadata).is_err());
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn archive_listing_rejects_links_and_expansion_before_extraction() {
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/updater-e2e/unit");
+        fs::create_dir_all(&parent).unwrap();
+        let stage = Stage::create(&parent).unwrap();
+        let archive = stage.path.join("archive.tar.gz");
+        for link in [false, true] {
+            let mut header = tar::Header::new_gnu();
+            header.set_path("Fogu-linux-x86_64/fogu").unwrap();
+            header.set_size(if link { 0 } else { MAX_EXTRACT + 1 });
+            header.set_mode(0o755);
+            if link {
+                header.set_entry_type(tar::EntryType::Symlink);
+                header.set_link_name("../../outside").unwrap();
+            }
+            header.set_cksum();
+            let mut gzip = flate2::write::GzEncoder::new(
+                File::create(&archive).unwrap(),
+                flate2::Compression::fast(),
+            );
+            gzip.write_all(header.as_bytes()).unwrap();
+            gzip.finish().unwrap();
+            assert!(platform::list_archive(&archive).is_err());
+        }
+    }
+
     #[test]
     fn release_contract_allows_skips_and_requires_intermediate_versions() {
         let body = "### Fixed\n- Fixed scrolling.\n<!-- fogu-update: {\"schema\":1,\"from\":\">=0.1.0, <0.2.0\"} -->";
@@ -1596,6 +1756,27 @@ mod tests {
         let _ = app.close_tab(id);
         assert!(app.tabs.iter().any(|t| t.id == id));
         assert!(app.update_busy());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn failed_commit_restores_the_displaced_binary() {
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/updater-e2e/unit");
+        fs::create_dir_all(&parent).unwrap();
+        let mut stage = Stage::create(&parent).unwrap();
+        let destination = stage.path.join("fogu");
+        fs::write(&destination, b"previous executable").unwrap();
+        let target = Target {
+            destination: destination.clone(),
+            restart: destination.clone(),
+            asset: "",
+            entry: "",
+        };
+        stage.preserve = true;
+        assert!(platform::commit(&stage.path.join("missing"), &target, &stage.path).is_err());
+        assert_eq!(fs::read(&destination).unwrap(), b"previous executable");
+        assert!(!stage.path.join("previous").exists());
+        stage.preserve = false;
     }
 
     #[test]

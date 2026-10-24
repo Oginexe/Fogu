@@ -1357,6 +1357,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "filetime"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
+dependencies = [
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1377,11 +1387,17 @@ dependencies = [
 name = "fogu"
 version = "0.1.6"
 dependencies = [
+ "flate2",
  "fogu-core",
  "fogu-ui",
+ "ring",
  "rustix 1.1.5",
+ "semver",
+ "serde_json",
+ "tar",
  "tracing",
  "tracing-subscriber",
+ "zipsign-api",
 ]
 
 [[package]]
@@ -1455,6 +1471,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "tar",
  "tiny-skia",
  "tokio",
  "toml",
@@ -4813,13 +4830,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "tar"
+version = "0.4.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
+dependencies = [
+ "filetime",
+ "libc",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",
@@ -6286,6 +6313,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00d866e1d567fd67738668647c2e06587851e0e3583df84298cc363c14602316"
 dependencies = [
+ "base64",
  "ed25519-dalek 2.2.0",
  "thiserror 2.0.21",
 ]
