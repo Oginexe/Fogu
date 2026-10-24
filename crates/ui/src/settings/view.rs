@@ -2,7 +2,7 @@
 //! form on the right; Appearance leads with a gallery of the colour schemes.
 
 use fogu_core::{ColorScheme, Config};
-use iced::widget::{Column, Row, button, column, container, row, scrollable, space, stack, text};
+use iced::widget::{Row, button, column, container, row, scrollable, space, stack, text};
 use iced::{Alignment, Border, Element, Font, Length};
 
 use super::{
@@ -748,11 +748,15 @@ fn recovery<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Form<'a> {
             "Also restore the scrollback (local shells)",
             r.restore_scrollback,
         ),
-        forms::toggle(
-            look,
-            FieldId::RecoverySshScrollback,
-            "Also restore SSH scrollback, encrypted",
-            r.restore_ssh_scrollback,
+        forms::note(
+            forms::toggle(
+                look,
+                FieldId::RecoverySshScrollback,
+                "Also restore SSH scrollback, encrypted",
+                r.restore_ssh_scrollback,
+            ),
+            "Locked with a key kept in your system keyring; without it, SSH tabs come back empty.",
+            look.dim,
         ),
         num(
             s,
@@ -762,16 +766,5 @@ fn recovery<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Form<'a> {
             r.scrollback_lines,
         ),
     ];
-    let warning = text("Local scrollback may hold passwords shown in the terminal; it is stored unencrypted, readable only by you.")
-        .size(12)
-        .color(WARN);
-    let ssh_note = text("SSH scrollback is locked with a key kept in your system keyring; without it, SSH tabs come back empty.")
-        .size(12)
-        .color(look.dim);
-    Column::new()
-        .push(forms::section(look, "Tab recovery", rows))
-        .push(warning)
-        .push(ssh_note)
-        .spacing(8)
-        .into()
+    forms::section(look, "Tab recovery", rows)
 }
