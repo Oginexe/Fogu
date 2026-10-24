@@ -231,7 +231,8 @@ xcode-select --install
 <details>
 <summary><b>SSH manager</b></summary>
 
-- Sidebar with groups, search and quick connect (`user@host:port`)
+- Sidebar with groups, search and quick connect (`user@host:port`); right-click a profile →
+  "Use for new tabs" to open it in every new tab
 - Reads your `~/.ssh/config` live (Host, HostName, User, Port, IdentityFile, ProxyJump,
   ProxyCommand, HostKeyAlias…) — no import step, nothing duplicated
 - Profile page that edits `config.toml` in place, keeping your comments and writing only the

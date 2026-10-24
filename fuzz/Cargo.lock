@@ -203,6 +203,7 @@ name = "fogu-core"
 version = "0.1.6"
 dependencies = [
  "dirs",
+ "rustix",
  "serde",
  "thiserror 2.0.21",
  "toml",

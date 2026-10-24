@@ -73,15 +73,26 @@ impl App {
         id
     }
 
-    /// `config.default_profile`, or the built-in default shell.
+    /// `config.default_profile` (a stored or built-in profile), or the built-in default shell
+    /// (as the sidebar lists it: named after the computer).
     pub(crate) fn default_profile(&self) -> Profile {
         let config = &self.config;
+        let find = |id: &fogu_core::ProfileId| {
+            config
+                .profiles
+                .iter()
+                .chain(&self.profiles.builtins)
+                .find(|p| &p.id == id)
+                .cloned()
+        };
+        let shell = Profile::default_shell();
+        // A default that no longer exists falls back like an unset one.
         config
             .default_profile
             .as_ref()
-            .and_then(|id| config.profiles.iter().find(|p| &p.id == id))
-            .cloned()
-            .unwrap_or_else(Profile::default_shell)
+            .and_then(find)
+            .or_else(|| find(&shell.id))
+            .unwrap_or(shell)
     }
 
     /// Opens `profile` (local `cwd` override for "new tab here") in a new last tab and

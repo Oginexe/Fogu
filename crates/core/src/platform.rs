@@ -51,6 +51,26 @@ pub fn state_dir() -> Option<PathBuf> {
     base.map(|base| base.join(APP_DIR))
 }
 
+/// The computer's name, without a domain (`P14S` for `P14S.lan`): the built-in default shell's
+/// name. `None` when the system reports none.
+#[must_use]
+pub fn host_name() -> Option<String> {
+    #[cfg(unix)]
+    let name = rustix::system::uname()
+        .nodename()
+        .to_string_lossy()
+        .into_owned();
+    #[cfg(windows)]
+    let name = std::env::var("COMPUTERNAME").ok()?;
+    short_host(&name)
+}
+
+/// `name` up to its first dot, trimmed; `None` when that leaves nothing.
+fn short_host(name: &str) -> Option<String> {
+    let short = name.split('.').next().unwrap_or_default().trim();
+    (!short.is_empty()).then(|| short.to_owned())
+}
+
 /// The user's download directory, used by SFTP double-click downloads.
 #[must_use]
 pub fn download_dir() -> Option<PathBuf> {
@@ -132,6 +152,15 @@ fn find_in(paths: &OsStr, name: &str) -> Option<PathBuf> {
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn host_names_lose_their_domain() {
+        assert_eq!(short_host("P14S.lan").as_deref(), Some("P14S"));
+        assert_eq!(short_host("mac-mini.local").as_deref(), Some("mac-mini"));
+        assert_eq!(short_host("DESKTOP-1").as_deref(), Some("DESKTOP-1"));
+        assert_eq!(short_host(" "), None);
+        assert_eq!(short_host(".lan"), None);
+    }
 
     #[test]
     fn app_directories_end_with_the_app_name() {
