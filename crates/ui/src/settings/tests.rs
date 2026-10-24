@@ -309,3 +309,20 @@ fn a_message_that_writes_the_config_first_takes_in_an_external_edit() {
     let _ = app.update(Message::Settings(SettingsMsg::Page(Page::Terminal)));
     assert!(app.config.profiles.iter().any(|p| p.id.0 == "late"));
 }
+
+#[test]
+fn updater_toast_opens_updates_without_downloading() {
+    let t = tmp();
+    let mut app = opened(&t);
+    let id = app.toasts.push(
+        crate::notifications::Notification::new(Level::Info, "Fogu 0.1.7 is available")
+            .action(crate::notifications::ToastAction::Update),
+    );
+    let _ = app.update(Message::ToastAccept(id));
+    assert_eq!(
+        app.active_tab().unwrap().settings.as_ref().unwrap().page,
+        Page::Updates
+    );
+    assert!(!app.update_busy());
+    assert!(app.toasts.get(id).is_none());
+}

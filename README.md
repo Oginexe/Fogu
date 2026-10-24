@@ -72,9 +72,25 @@ and starts in about a tenth of a second. *Fogu* means *fire* in Sardinian.
 
 ### Linux
 
+Fogu needs `curl` (for this download and for its own updates) and the X11/Wayland keyboard,
+cursor and input libraries. Desktop installs have them all; on a minimal system install them first:
+
+```bash
+# Debian, Ubuntu
+sudo apt install curl libx11-6 libx11-xcb1 libxcb1 libxcursor1 libxi6 libxkbcommon0 libxkbcommon-x11-0 libwayland-client0
+# Fedora, RHEL
+sudo dnf install curl libX11 libX11-xcb libxcb libXcursor libXi libxkbcommon libxkbcommon-x11 libwayland-client
+# Arch Linux
+sudo pacman -S --needed curl libx11 libxcb libxcursor libxi libxkbcommon libxkbcommon-x11 wayland
+```
+
+Without a working GPU driver, start it with `fogu --software-render`.
+
+Then:
+
 ```bash
 curl -fsSL https://github.com/Revdep/Fogu/releases/latest/download/Fogu-linux-x86_64.tar.gz | tar xz
-cd Fogu-linux-x86_64 && ./scripts/install.sh
+cd Fogu-linux-x86_64 && ./install.sh
 ```
 
 Or the single-file AppImage:
@@ -84,21 +100,29 @@ curl -fsSLo Fogu.AppImage https://github.com/Revdep/Fogu/releases/latest/downloa
 chmod +x Fogu.AppImage && ./Fogu.AppImage
 ```
 
-Needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36, Arch Linux).
+Needs glibc 2.28 or newer (Debian 10, Ubuntu 20.04, RHEL 8, Fedora, Arch Linux).
 
 ### macOS
 
+`curl`, which Fogu also uses for its updates, comes with macOS.
+
 ```bash
-curl -fsSL https://github.com/Revdep/Fogu/releases/latest/download/Fogu-macos-aarch64.tar.gz | tar xz
-cd Fogu-macos-aarch64 && ./scripts/install.sh
+curl -fsSLo Fogu.zip https://github.com/Revdep/Fogu/releases/latest/download/Fogu-macos-aarch64.zip
+mkdir -p ~/Applications && ditto -x -k Fogu.zip ~/Applications && rm Fogu.zip
 ```
 
 On Intel Macs use `macos-x86_64` instead of `macos-aarch64`. Fogu then shows up in Applications.
+To start it as `fogu` from a terminal too (a wrapper, not a symlink, so macOS treats it as the app):
+
+```bash
+mkdir -p ~/.local/bin && printf '#!/bin/sh\nexec ~/Applications/Fogu.app/Contents/MacOS/fogu "$@"\n' > ~/.local/bin/fogu
+chmod 755 ~/.local/bin/fogu
+```
 
 Downloaded with a browser instead of `curl`? Fogu is not notarized by Apple, so unblock it first:
 
 ```bash
-xattr -dr com.apple.quarantine Fogu-macos-*
+xattr -dr com.apple.quarantine ~/Applications/Fogu.app
 ```
 
 <details>
@@ -117,7 +141,8 @@ xattr -dr com.apple.quarantine Fogu-macos-*
 
 ### Windows (alpha)
 
-Windows 10 or 11, x86_64. In PowerShell:
+Windows 10 (1803 or later) or 11, x86_64; `curl.exe`, which Fogu also uses for its updates, comes
+with them. In PowerShell:
 
 ```powershell
 curl.exe -fsSLo Fogu.zip https://github.com/Revdep/Fogu/releases/latest/download/Fogu-windows-x86_64.zip
@@ -157,13 +182,13 @@ cd Fogu && ./scripts/install.sh
 Needs [rustup](https://rustup.rs) (it picks the right Rust version). Plus, on Debian/Ubuntu:
 
 ```bash
-sudo apt install build-essential pkg-config libudev-dev libxkbcommon-dev libwayland-dev
+sudo apt install build-essential pkg-config libudev-dev libxkbcommon-dev libwayland-dev curl
 ```
 
 on Arch Linux:
 
 ```bash
-sudo pacman -S --needed base-devel pkgconf systemd-libs libxkbcommon wayland
+sudo pacman -S --needed base-devel pkgconf systemd-libs libxkbcommon wayland curl
 ```
 
 and on macOS:
@@ -275,7 +300,7 @@ Every action can be rebound under `[hotkeys]`. `Cmd` and `Option` are accepted a
 names on every system (the same keys as `Meta` and `Alt`); macOS shows them that way.
 
 ```
-fogu [--config-dir PATH] [--software-render] [--no-recovery]
+fogu [--config-dir PATH] [--software-render] [--no-recovery] [--licenses]
 ```
 
 </details>
@@ -287,3 +312,51 @@ privately through [GitHub security advisories](https://github.com/Revdep/Fogu/se
 Fogu is [MIT](LICENSE)-licensed and builds on [Alacritty](https://github.com/alacritty/alacritty),
 [iced](https://iced.rs) and [russh](https://github.com/Eugeny/russh); third-party notices are in
 [`THIRD_PARTY_LICENSES`](THIRD_PARTY_LICENSES).
+
+## Optional updates
+
+Official artifacts can be built with `FOGU_UPDATER=manual` (Settings › Updates) or
+`automatic` (also checks once a day, 60 seconds after startup). Local builds leave it unset.
+An update is downloaded and installed only after you review its notes and choose Install.
+Automatic notices appear at most twice per version, at least three days apart in different
+sessions. Restart saves recovery state and asks before closing running terminals.
+
+Set `FOGU_DISABLE_UPDATER=1`, or place `.fogu-managed` beside the installed executable,
+to disable all updater network requests and replacement. Package managers redistributing an
+official artifact should install that marker; installations without it cannot always be identified.
+Linux user binaries and AppImages are the initial OTA targets. macOS and Windows remain manual
+until real N-1 → N updates pass on both Mac architectures and on Windows.
+Each native platform has one `OTA_VALIDATED` constant in `crates/ui/src/updater.rs`; it gates
+installation in release builds while manual checks remain available. Updates never request elevated privileges.
+
+Archives require an Ed25519 signature, the GitHub SHA-256 digest, and `SHA256SUMS`.
+These are the only authenticity and integrity checks: macOS bundles are signed ad-hoc,
+and Windows executables have no paid certificate.
+The public keys in `assets/updater` are **placeholders** and must be replaced before enabling OTA
+in a public release. Store the signing key in a protected release environment, keep the reserve
+private key offline, and require human approval for signing and changelog publication.
+On compromise, disable signing, revoke access, publish with the reserve key and remove the
+compromised public key from new clients. Older clients still trust it and may need manual recovery.
+
+Each release body must declare the source versions that support a direct upgrade, for example
+`<!-- fogu-update: {"schema":1,"from":">=0.1.6, <0.2.0"} -->`. The client validates this bounded
+contract with Rust semver requirements; missing/unknown contracts and excluded source versions
+require a manual or intermediate upgrade. The contract line is omitted from the displayed notes.
+The first client displays latest-release notes and links to the full changelog for skipped
+versions; it does not claim a complete cumulative history.
+Downloads go through the system's `curl` (HTTPS only, its `https_proxy`/`NO_PROXY` environment and
+certificate store), with size limits, a total timeout and a 30-second idle timeout; without
+`curl` the Updates page asks to install it or to download Fogu from the release page.
+Linux archives accept ordinary files/directories and reject extended GNU/PAX TAR headers.
+Replacement uses sibling staging and a best-effort rollback. Forced termination between renames
+can leave the old binary in `.fogu-update-*/previous`; recover it manually if the destination is
+missing. Commit failures retain the staging directory. No power-loss guarantee is made.
+Release withdrawal is checked again before commit; it cannot revoke a commit already in progress.
+The restart child waits up to 30 seconds for the parent before touching recovery state; there is
+no ready-handshake, so a child that cannot start must be reopened manually.
+
+`FOGU_UPDATER=manual cargo test -p fogu --test updater_e2e -- --ignored` updates a test build from a
+local server, with its own signing key, and checks that every bad release leaves it untouched. Its
+server and key overrides, and the headless install flag, exist only in debug builds. Public rollout
+starts in manual mode; automatic prompts require a successful public update cycle for the
+individual artifact first.

@@ -25,12 +25,20 @@ Options:
       --config-dir <PATH>  Use this directory instead of the platform one for config.toml
       --software-render    Render on the CPU instead of the GPU; for broken drivers and VMs
       --no-recovery        Start with one new tab: don't restore or save the open tabs
+      --licenses           Print the licences of every crate built into Fogu
   -h, --help               Print help
   -V, --version            Print version
 ";
 
 /// Command-line flags.
 #[derive(Debug, Default)]
+#[cfg_attr(
+    debug_assertions,
+    expect(
+        clippy::struct_excessive_bools,
+        reason = "independent command-line flags"
+    )
+)]
 pub struct Cli {
     /// `--config-dir PATH`: use this directory instead of the platform one for `config.toml`.
     pub config_dir: Option<PathBuf>,
@@ -40,6 +48,14 @@ pub struct Cli {
     pub exit_after_first_frame: bool,
     /// `--no-recovery`: start with one new tab; don't restore or save the session.
     pub no_recovery: bool,
+    /// Internal restart barrier, consumed before bootstrap.
+    pub after_update_of: Option<u32>,
+    /// Headless updater exercise; absent from release builds.
+    #[cfg(debug_assertions)]
+    pub updater_test: bool,
+    /// `--updater-test-verify DIR VERSION`: the release gate (CI, debug builds).
+    #[cfg(all(debug_assertions, target_os = "linux"))]
+    pub updater_verify: Option<(PathBuf, String)>,
 }
 
 /// Why parsing stopped before a [`Cli`].
@@ -47,6 +63,7 @@ pub struct Cli {
 enum Stop {
     Help,
     Version,
+    Licenses,
     Error(String),
 }
 
@@ -58,6 +75,10 @@ impl Cli {
             Ok(cli) => cli,
             Err(Stop::Help) => {
                 print!("{HELP}");
+                std::process::exit(0)
+            }
+            Err(Stop::Licenses) => {
+                println!("{}", fogu_ui::licenses());
                 std::process::exit(0)
             }
             Err(Stop::Version) => {
@@ -77,8 +98,31 @@ impl Cli {
         while let Some(arg) = args.next() {
             let text = arg.to_string_lossy();
             match text.as_ref() {
+                "--licenses" => return Err(Stop::Licenses),
                 "-h" | "--help" => return Err(Stop::Help),
                 "-V" | "--version" => return Err(Stop::Version),
+                "--after-update-of" => {
+                    let pid = args
+                        .next()
+                        .and_then(|p| p.to_str().and_then(|p| p.parse::<u32>().ok()))
+                        .filter(|p| *p > 1 && *p != std::process::id())
+                        .ok_or_else(|| Stop::Error("invalid update parent pid".into()))?;
+                    cli.after_update_of = Some(pid);
+                }
+                #[cfg(all(debug_assertions, target_os = "linux"))]
+                "--updater-test-verify" => {
+                    let dir = args
+                        .next()
+                        .map(PathBuf::from)
+                        .ok_or_else(|| Stop::Error("missing release directory".into()))?;
+                    let version = args
+                        .next()
+                        .and_then(|v| v.into_string().ok())
+                        .ok_or_else(|| Stop::Error("missing release version".into()))?;
+                    cli.updater_verify = Some((dir, version));
+                }
+                #[cfg(debug_assertions)]
+                "--updater-test-install" => cli.updater_test = true,
                 "--software-render" => cli.software_render = true,
                 "--exit-after-first-frame" => cli.exit_after_first_frame = true,
                 "--no-recovery" => cli.no_recovery = true,
@@ -177,6 +221,15 @@ mod tests {
     #[test]
     fn help_version_and_errors_stop() {
         assert_eq!(parse(&["--help"]).unwrap_err(), Stop::Help);
+        assert_eq!(parse(&["--licenses"]).unwrap_err(), Stop::Licenses);
+        assert!(parse(&["--after-update-of", "1"]).is_err());
+        assert!(parse(&["--after-update-of", "invalid"]).is_err());
+        assert_eq!(
+            parse(&["--after-update-of", "123456"])
+                .unwrap()
+                .after_update_of,
+            Some(123_456)
+        );
         assert_eq!(parse(&["-V"]).unwrap_err(), Stop::Version);
         assert!(matches!(parse(&["--bogus"]), Err(Stop::Error(_))));
         assert!(matches!(parse(&["--config-dir"]), Err(Stop::Error(_))));

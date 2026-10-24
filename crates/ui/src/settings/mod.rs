@@ -32,16 +32,20 @@ pub enum Page {
     Sftp,
     Ssh,
     Recovery,
+    Updates,
+    Licenses,
 }
 
 impl Page {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 8] = [
         Self::Appearance,
         Self::Terminal,
         Self::Sidebar,
         Self::Sftp,
         Self::Ssh,
         Self::Recovery,
+        Self::Updates,
+        Self::Licenses,
     ];
 
     /// Title and the one-line summary under it in the nav column.
@@ -52,6 +56,8 @@ impl Page {
             Self::Sidebar => ("Profile sidebar", "Rows, recent, clicks"),
             Self::Sftp => ("SFTP", "Panel, downloads, limits"),
             Self::Ssh => ("SSH", "~/.ssh/config"),
+            Self::Licenses => ("About / Licenses", "Bundled third-party licenses"),
+            Self::Updates => ("Updates", "Optional updates and release notes"),
             Self::Recovery => ("Tab recovery", "Restore tabs on restart"),
         }
     }

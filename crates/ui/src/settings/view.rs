@@ -27,9 +27,13 @@ const MAX_W: f32 = 760.0;
 const NEW_TERMINALS: &str = "Applies to terminals opened from now on.";
 /// Under fields read only when the window opens.
 const AT_START: &str = "Read when Fogu starts: restart it to apply.";
+/// Above the bundled licences: where the third-party crate notices are.
+const LICENSES_HINT: &str =
+    "Run `fogu --licenses` for the licences of every crate built into Fogu.";
 
 /// What the page needs from the app besides the settings state.
 pub struct Ctx<'a> {
+    pub updater: &'a crate::updater::Updater,
     pub config: &'a Config,
     pub colors: &'a Colors,
     pub look: Look,
@@ -44,13 +48,19 @@ pub struct Ctx<'a> {
 /// The settings tab's page.
 pub fn page<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Element<'a, Message> {
     let look = cx.look;
-    let form: Form<'a> = match s.page {
-        Page::Appearance => appearance(s, cx),
-        Page::Terminal => terminal(s, cx),
-        Page::Sidebar => sidebar(s, cx),
-        Page::Sftp => sftp(s, cx),
-        Page::Ssh => ssh(cx),
-        Page::Recovery => recovery(s, cx),
+    let field = |form: Form<'a>| {
+        form.map(|Field(id, value)| Message::Settings(SettingsMsg::Field(id, value)))
+    };
+    let form: Element<'a, Message> = match s.page {
+        Page::Appearance => field(appearance(s, cx)),
+        Page::Terminal => field(terminal(s, cx)),
+        Page::Sidebar => field(sidebar(s, cx)),
+        Page::Sftp => field(sftp(s, cx)),
+        Page::Ssh => field(ssh(cx)),
+        Page::Recovery => field(recovery(s, cx)),
+        Page::Updates => crate::updater::view(cx.updater, look),
+        // The crate notices are ~500 KB: one text widget that size stalls the UI thread.
+        Page::Licenses => licenses(look),
     };
     let (title, summary) = s.page.label();
     let hint = if s.page == Page::Appearance {
@@ -59,7 +69,6 @@ pub fn page<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Element<'a, Message> {
         summary
     };
     let head = forms::page_head(look, None, title, hint);
-    let form = form.map(|Field(id, value)| Message::Settings(SettingsMsg::Field(id, value)));
     let body = column![head, form]
         .spacing(22)
         .max_width(MAX_W)
@@ -102,7 +111,8 @@ fn nav<'a>(current: Page, cx: &Ctx<'a>) -> Element<'a, Message> {
             Page::Sidebar => Icon::Sidebar,
             Page::Sftp => Icon::Folder,
             Page::Ssh => Icon::Key,
-            Page::Recovery => Icon::History,
+            Page::Recovery | Page::Licenses => Icon::History,
+            Page::Updates => Icon::Download,
         };
         rows = rows.push(forms::nav_item(
             look,
@@ -767,4 +777,83 @@ fn recovery<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Form<'a> {
         ),
     ];
     forms::section(look, "Tab recovery", rows)
+}
+
+/// `THIRD_PARTY_LICENSES` (Markdown) as a page: headings, paragraphs and bullets reflowed to the
+/// page width, `**`/backtick markup dropped. Only what that one file uses.
+fn licenses<'a>(look: Look) -> Element<'a, Message> {
+    let mut page = column![text(LICENSES_HINT).size(12).color(look.dim)].spacing(10);
+    for block in markdown_blocks(include_str!("../../../../THIRD_PARTY_LICENSES")) {
+        page = page.push(match block {
+            Block::Heading(1, line) => text(line).size(18).font(crate::UI_MEDIUM).color(look.fg),
+            Block::Heading(_, line) => text(line).size(14.5).font(crate::UI_MEDIUM).color(look.fg),
+            Block::Bullet(line) => text(format!("•  {line}"))
+                .size(12.5)
+                .color(look.fg)
+                // `--unicodes=…` is one long word: break it rather than run off the page.
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+            Block::Text(line) => text(line)
+                .size(12.5)
+                .color(look.fg)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+        });
+    }
+    page.into()
+}
+
+/// A Markdown block of [`licenses`].
+#[derive(Debug, PartialEq)]
+enum Block {
+    Heading(usize, String),
+    Bullet(String),
+    Text(String),
+}
+
+/// Splits `md` into blocks, joining hard-wrapped lines so the text wraps at the page width.
+fn markdown_blocks(md: &str) -> Vec<Block> {
+    let plain = |s: &str| s.replace("**", "").replace('`', "");
+    let mut blocks: Vec<Block> = Vec::new();
+    let mut open = false;
+    for line in md.lines() {
+        let trimmed = line.trim();
+        let hashes = trimmed.chars().take_while(|&c| c == '#').count();
+        if trimmed.is_empty() {
+            open = false;
+        } else if hashes > 0 && trimmed[hashes..].starts_with(' ') {
+            blocks.push(Block::Heading(hashes, plain(trimmed[hashes..].trim())));
+            open = false;
+        } else if let Some(item) = trimmed.strip_prefix("- ") {
+            blocks.push(Block::Bullet(plain(item)));
+            open = true;
+        } else if let (true, Some(Block::Bullet(last) | Block::Text(last))) =
+            (open, blocks.last_mut())
+        {
+            last.push(' ');
+            last.push_str(&plain(trimmed));
+        } else {
+            blocks.push(Block::Text(plain(trimmed)));
+            open = true;
+        }
+    }
+    blocks
+}
+
+#[cfg(test)]
+mod licenses_tests {
+    use super::{Block, markdown_blocks};
+
+    #[test]
+    fn markdown_blocks_reflow_wrapped_lines_and_drop_markup() {
+        let md = "# Title\n\nIntro `code`\ncontinues.\n\n## Fonts\n\n- **Inter** (`a.ttf`,\n  b.ttf)\n- Next\n";
+        assert_eq!(
+            markdown_blocks(md),
+            [
+                Block::Heading(1, "Title".into()),
+                Block::Text("Intro code continues.".into()),
+                Block::Heading(2, "Fonts".into()),
+                Block::Bullet("Inter (a.ttf, b.ttf)".into()),
+                Block::Bullet("Next".into()),
+            ]
+        );
+    }
 }

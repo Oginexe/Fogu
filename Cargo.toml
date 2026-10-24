@@ -88,6 +88,14 @@ open = "5.4.4"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 
 
+# why: the updater's Ed25519 archive signatures (the format the `zipsign` CLI writes in release CI)
+zipsign-api = { version = "0.2.2", default-features = false }
+# why: release tags and the release's "upgrade from" ranges
+semver = { version = "1.0.28", features = ["serde"] }
+# why: updater archives (.tar.gz on Linux, .zip on macOS/Windows); flate2 already comes with russh
+flate2 = "1.1.10"
+zip = { version = "9.1.0", default-features = false, features = ["deflate"] }
+
 [workspace.lints.rust]
 # `deny`, not `forbid`: `fogu_core::winsec` (Windows only) is the one module allowed to opt out.
 unsafe_code = "deny"

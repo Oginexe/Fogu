@@ -445,6 +445,9 @@ impl App {
 
     /// Closes every pane of tab `id`; the tab goes with its last pane.
     pub(crate) fn close_tab(&mut self, id: TabId) -> Task<Message> {
+        if self.tabs.len() == 1 && self.update_busy() {
+            return self.update(Message::CloseRequested);
+        }
         let Some(tab) = self.tabs.iter().find(|t| t.id == id) else {
             return Task::none();
         };
@@ -462,6 +465,9 @@ impl App {
 
     /// Drops tab `id` (its panes close their sessions); exits the app after the last tab.
     pub(crate) fn remove_tab(&mut self, id: TabId) -> Task<Message> {
+        if self.tabs.len() == 1 && self.update_busy() {
+            return self.on_update(crate::updater::UpdateMsg::Open);
+        }
         let Some(index) = self.tabs.iter().position(|t| t.id == id) else {
             return Task::none();
         };
