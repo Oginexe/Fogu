@@ -19,7 +19,7 @@ use crate::message::Message;
 use crate::notifications::{Level, Notification, ToastAction};
 
 const MAX_ASSET: u64 = 128 * 1024 * 1024;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 const MAX_EXTRACT: u64 = 512 * 1024 * 1024;
 const LATEST: &str = "https://api.github.com/repos/Revdep/Fogu/releases/latest";
 const DOWNLOADS: &str = "https://github.com/Revdep/Fogu/releases/download";
@@ -768,7 +768,7 @@ fn clean_stale(parent: &Path, destination: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn safe_entry(path: &Path) -> bool {
     !path.as_os_str().is_empty()
         && path
@@ -908,7 +908,7 @@ fn verify_payload(
 }
 
 // Platform strategies are deliberately opt-in, added only after their staging gate.
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod platform {
     use super::{Command, Path, PathBuf, Result, Target, Version};
     pub(super) fn detect(_: PathBuf) -> Result<Target> {
@@ -1172,7 +1172,14 @@ impl App {
 
 /// Native release installs remain manual until their real-machine update gate passes.
 fn ota_supported() -> bool {
-    cfg!(target_os = "linux")
+    #[cfg(target_os = "macos")]
+    {
+        cfg!(debug_assertions) || platform::OTA_VALIDATED
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        cfg!(target_os = "linux")
+    }
 }
 
 /// Plain-text update page, with an explicit action for every network/install operation.
@@ -1459,10 +1466,102 @@ mod platform {
     }
 }
 
+#[cfg(target_os = "macos")]
+mod platform {
+    use super::{
+        Command, Path, PathBuf, Result, Target, Version, failure, fs, list_zip, ota_supported,
+        probe_version, swap,
+    };
+    // shortcut: macOS OTA is untested on real machines, enable after real N-1 to N runs on ARM and Intel Macs.
+    pub(super) const OTA_VALIDATED: bool = false;
+
+    pub(super) fn detect(exe: PathBuf) -> Result<Target> {
+        if exe.file_name().is_none_or(|name| name != "fogu") {
+            return Err("Unsupported application layout".into());
+        }
+        if exe.to_string_lossy().contains("/AppTranslocation/") {
+            return Err("Move Fogu to Applications before updating".into());
+        }
+        let bundle = exe
+            .parent()
+            .filter(|p| p.file_name().is_some_and(|n| n == "MacOS"))
+            .and_then(Path::parent)
+            .filter(|p| p.file_name().is_some_and(|n| n == "Contents"))
+            .and_then(Path::parent)
+            .ok_or("Unsupported application layout")?;
+        if bundle.file_name().is_none_or(|n| n != "Fogu.app") {
+            return Err("Update the app using your installation method".into());
+        }
+        let asset = match std::env::consts::ARCH {
+            "aarch64" => "Fogu-macos-aarch64.zip",
+            "x86_64" => "Fogu-macos-x86_64.zip",
+            _ => return Err("Unsupported architecture".into()),
+        };
+        Ok(Target {
+            destination: bundle.to_path_buf(),
+            restart: exe,
+            asset,
+            entry: "Fogu.app",
+        })
+    }
+    fn identity(bundle: &Path) -> Result<()> {
+        let output = Command::new("/usr/libexec/PlistBuddy")
+            .args(["-c", "Print :CFBundleIdentifier"])
+            .arg(bundle.join("Contents/Info.plist"))
+            .output()
+            .map_err(failure)?;
+        if !output.status.success() || output.stdout != b"io.github.revdep.fogu\n" {
+            return Err("Unrecognized application bundle".into());
+        }
+        Ok(())
+    }
+    /// Shipped with macOS.
+    pub(super) fn curl() -> Option<PathBuf> {
+        Some(PathBuf::from("/usr/bin/curl")).filter(|p| p.is_file())
+    }
+    pub(super) fn quiet_probe(_: &mut Command) {}
+    pub(super) fn preflight(target: &Target) -> Result<()> {
+        identity(&target.destination)?;
+        if !ota_supported() {
+            return Err("Download the app and replace Fogu in Applications".into());
+        }
+        Ok(())
+    }
+    pub(super) fn list_archive(path: &Path) -> Result<()> {
+        list_zip(path).map(drop)
+    }
+    pub(super) fn verify(source: &Path, expected: &Version) -> Result<()> {
+        use std::os::unix::fs::PermissionsExt as _;
+        identity(source)?;
+        let exe = source.join("Contents/MacOS/fogu");
+        if fs::metadata(&exe).map_err(failure)?.permissions().mode() & 0o111 == 0 {
+            return Err("Bundle executable is not executable".into());
+        }
+        let output = Command::new("/usr/libexec/PlistBuddy")
+            .args(["-c", "Print :CFBundleShortVersionString"])
+            .arg(source.join("Contents/Info.plist"))
+            .output()
+            .map_err(failure)?;
+        if !output.status.success() || output.stdout != format!("{expected}\n").as_bytes() {
+            return Err("Bundle version does not match release".into());
+        }
+        if probe_version(&exe)? != *expected {
+            return Err("Bundle version does not match release".into());
+        }
+        Ok(())
+    }
+    pub(super) fn commit(source: &Path, target: &Target, stage: &Path) -> Result<()> {
+        swap(source, &target.destination, &stage.join("previous")).map_err(|e| {
+            tracing::error!(%e, backup = %stage.display(), "bundle replacement failed; preserve backup");
+            "Bundle replacement failed; recover the previous bundle from the sibling .fogu-update directory".into()
+        })
+    }
+}
+
 /// Moves `dest` to `backup` and `source` into its place, putting `dest` back if the second
 /// rename fails. All three share a filesystem (the stage is a sibling of `dest`); a kill between
 /// the renames leaves the old copy at `backup`.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn swap(source: &Path, dest: &Path, backup: &Path) -> std::io::Result<()> {
     fs::rename(dest, backup)?;
     if let Err(e) = fs::rename(source, dest) {
@@ -1473,7 +1572,7 @@ fn swap(source: &Path, dest: &Path, backup: &Path) -> std::io::Result<()> {
 }
 
 /// Checks the zipsign signature of `archive` against `keys`, its file name as the context.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn signed_by(
     archive: &Path,
     keys: &[[u8; 32]],
@@ -1506,7 +1605,12 @@ fn extract(archive: &Path, into: &Path) -> Result<()> {
     tar::Archive::new(gzip).unpack(into).map_err(failure)
 }
 
-#[cfg(all(debug_assertions, target_os = "linux"))]
+#[cfg(target_os = "macos")]
+fn verify_signature(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
+    zip_signed_by(archive, keys)
+}
+
+#[cfg(any(target_os = "macos", all(debug_assertions, target_os = "linux")))]
 fn zip_signed_by(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
     signed_by(archive, keys, |file, keys, context| {
         zipsign_api::verify::verify_zip(file, keys, Some(context))
@@ -1515,18 +1619,25 @@ fn zip_signed_by(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
     })
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
+fn extract(archive: &Path, into: &Path) -> Result<()> {
+    zip::ZipArchive::new(File::open(archive).map_err(failure)?)
+        .and_then(|mut zip| zip.extract(into))
+        .map_err(failure)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn verify_signature(_: &Path, _: &[[u8; 32]]) -> Result<()> {
     Err("Unsupported archive".into())
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn extract(_: &Path, _: &Path) -> Result<()> {
     Err("Unsupported archive".into())
 }
 
 /// The regular files of a safe zip: no links or special files, bounded count and size.
-#[cfg(all(debug_assertions, target_os = "linux"))]
+#[cfg(any(target_os = "macos", all(debug_assertions, target_os = "linux")))]
 fn list_zip(path: &Path) -> Result<std::collections::HashSet<PathBuf>> {
     let mut archive = zip::ZipArchive::new(File::open(path).map_err(failure)?).map_err(failure)?;
     if archive.len() > 4096 {
