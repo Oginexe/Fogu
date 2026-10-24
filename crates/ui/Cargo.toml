@@ -41,3 +41,5 @@ default = ["ssh"]
 # SSH sessions (forwards `fogu-session/ssh`).
 ssh = ["fogu-session/ssh"]
 
+[target.'cfg(target_os = "windows")'.dependencies]
+self-replace.workspace = true

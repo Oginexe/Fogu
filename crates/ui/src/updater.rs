@@ -19,7 +19,6 @@ use crate::message::Message;
 use crate::notifications::{Level, Notification, ToastAction};
 
 const MAX_ASSET: u64 = 128 * 1024 * 1024;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 const MAX_EXTRACT: u64 = 512 * 1024 * 1024;
 const LATEST: &str = "https://api.github.com/repos/Revdep/Fogu/releases/latest";
 const DOWNLOADS: &str = "https://github.com/Revdep/Fogu/releases/download";
@@ -768,7 +767,6 @@ fn clean_stale(parent: &Path, destination: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn safe_entry(path: &Path) -> bool {
     !path.as_os_str().is_empty()
         && path
@@ -908,7 +906,7 @@ fn verify_payload(
 }
 
 // Platform strategies are deliberately opt-in, added only after their staging gate.
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 mod platform {
     use super::{Command, Path, PathBuf, Result, Target, Version};
     pub(super) fn detect(_: PathBuf) -> Result<Target> {
@@ -1172,11 +1170,11 @@ impl App {
 
 /// Native release installs remain manual until their real-machine update gate passes.
 fn ota_supported() -> bool {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
         cfg!(debug_assertions) || platform::OTA_VALIDATED
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         cfg!(target_os = "linux")
     }
@@ -1466,6 +1464,116 @@ mod platform {
     }
 }
 
+/// Moves `dest` to `backup` and `source` into its place, putting `dest` back if the second
+/// rename fails. All three share a filesystem (the stage is a sibling of `dest`); a kill between
+/// the renames leaves the old copy at `backup`.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn swap(source: &Path, dest: &Path, backup: &Path) -> std::io::Result<()> {
+    fs::rename(dest, backup)?;
+    if let Err(e) = fs::rename(source, dest) {
+        fs::rename(backup, dest)?;
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// Checks the zipsign signature of `archive` against `keys`, its file name as the context.
+fn signed_by(
+    archive: &Path,
+    keys: &[[u8; 32]],
+    verify: impl FnOnce(&mut File, &[zipsign_api::VerifyingKey], &[u8]) -> Result<()>,
+) -> Result<()> {
+    let context = archive
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("Invalid archive name")?;
+    let keys = zipsign_api::verify::collect_keys(keys.iter().copied().map(Ok)).map_err(failure)?;
+    verify(
+        &mut File::open(archive).map_err(failure)?,
+        &keys,
+        context.as_bytes(),
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn verify_signature(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
+    signed_by(archive, keys, |file, keys, context| {
+        zipsign_api::verify::verify_tar(file, keys, Some(context))
+            .map(drop)
+            .map_err(failure)
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn extract(archive: &Path, into: &Path) -> Result<()> {
+    let gzip = flate2::read::GzDecoder::new(File::open(archive).map_err(failure)?);
+    tar::Archive::new(gzip).unpack(into).map_err(failure)
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn verify_signature(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
+    zip_signed_by(archive, keys)
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows", debug_assertions))]
+fn zip_signed_by(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
+    signed_by(archive, keys, |file, keys, context| {
+        zipsign_api::verify::verify_zip(file, keys, Some(context))
+            .map(drop)
+            .map_err(failure)
+    })
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn extract(archive: &Path, into: &Path) -> Result<()> {
+    zip::ZipArchive::new(File::open(archive).map_err(failure)?)
+        .and_then(|mut zip| zip.extract(into))
+        .map_err(failure)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+fn verify_signature(_: &Path, _: &[[u8; 32]]) -> Result<()> {
+    Err("Unsupported archive".into())
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+fn extract(_: &Path, _: &Path) -> Result<()> {
+    Err("Unsupported archive".into())
+}
+
+/// The regular files of a safe zip: no links or special files, bounded count and size.
+#[cfg(any(target_os = "macos", target_os = "windows", debug_assertions))]
+fn list_zip(path: &Path) -> Result<std::collections::HashSet<PathBuf>> {
+    let mut archive = zip::ZipArchive::new(File::open(path).map_err(failure)?).map_err(failure)?;
+    if archive.len() > 4096 {
+        return Err("Archive has too many entries".into());
+    }
+    let mut total = 0u64;
+    let (mut names, mut files) = (
+        std::collections::HashSet::new(),
+        std::collections::HashSet::new(),
+    );
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index).map_err(failure)?;
+        total = total
+            .checked_add(entry.size())
+            .ok_or("Archive is too large")?;
+        let path = entry.enclosed_name().ok_or("Unsafe archive path")?;
+        let kind = entry.unix_mode().unwrap_or(0) & 0o170_000;
+        if total > MAX_EXTRACT
+            || !safe_entry(&path)
+            || !names.insert(path.clone())
+            || !matches!(kind, 0 | 0o100_000 | 0o040_000)
+        {
+            return Err("Unsafe or oversized archive".into());
+        }
+        if entry.is_file() {
+            files.insert(path);
+        }
+    }
+    Ok(files)
+}
+
 #[cfg(target_os = "macos")]
 mod platform {
     use super::{
@@ -1558,115 +1666,86 @@ mod platform {
     }
 }
 
-/// Moves `dest` to `backup` and `source` into its place, putting `dest` back if the second
-/// rename fails. All three share a filesystem (the stage is a sibling of `dest`); a kill between
-/// the renames leaves the old copy at `backup`.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn swap(source: &Path, dest: &Path, backup: &Path) -> std::io::Result<()> {
-    fs::rename(dest, backup)?;
-    if let Err(e) = fs::rename(source, dest) {
-        fs::rename(backup, dest)?;
-        return Err(e);
+#[cfg(target_os = "windows")]
+mod platform {
+    use super::{
+        Command, Path, PathBuf, Result, Target, Version, failure, fs, list_zip, ota_supported,
+        probe_version,
+    };
+    use std::os::windows::process::CommandExt as _;
+    // shortcut: Windows OTA is untested on a real machine, enable after a real N-1 to N run including Defender.
+    pub(super) const OTA_VALIDATED: bool = false;
+
+    pub(super) fn detect(exe: PathBuf) -> Result<Target> {
+        if std::env::consts::ARCH != "x86_64" || exe.file_name().is_none_or(|n| n != "fogu.exe") {
+            return Err("Unsupported installation".into());
+        }
+        for key in ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"] {
+            // `exe` is canonical (`\\?\C:\...`): compare canonical paths, component by component.
+            if let Some(dir) = std::env::var_os(key)
+                && fs::canonicalize(dir).is_ok_and(|dir| exe.starts_with(dir))
+            {
+                return Err("Update Fogu using your installation method in Program Files".into());
+            }
+        }
+        Ok(Target {
+            destination: exe.clone(),
+            restart: exe,
+            asset: "Fogu-windows-x86_64.zip",
+            entry: "Fogu-windows-x86_64/fogu.exe",
+        })
     }
-    Ok(())
-}
-
-/// Checks the zipsign signature of `archive` against `keys`, its file name as the context.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn signed_by(
-    archive: &Path,
-    keys: &[[u8; 32]],
-    verify: impl FnOnce(&mut File, &[zipsign_api::VerifyingKey], &[u8]) -> Result<()>,
-) -> Result<()> {
-    let context = archive
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or("Invalid archive name")?;
-    let keys = zipsign_api::verify::collect_keys(keys.iter().copied().map(Ok)).map_err(failure)?;
-    verify(
-        &mut File::open(archive).map_err(failure)?,
-        &keys,
-        context.as_bytes(),
-    )
-}
-
-#[cfg(target_os = "linux")]
-fn verify_signature(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
-    signed_by(archive, keys, |file, keys, context| {
-        zipsign_api::verify::verify_tar(file, keys, Some(context))
-            .map(drop)
-            .map_err(failure)
-    })
-}
-
-#[cfg(target_os = "linux")]
-fn extract(archive: &Path, into: &Path) -> Result<()> {
-    let gzip = flate2::read::GzDecoder::new(File::open(archive).map_err(failure)?);
-    tar::Archive::new(gzip).unpack(into).map_err(failure)
-}
-
-#[cfg(target_os = "macos")]
-fn verify_signature(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
-    zip_signed_by(archive, keys)
-}
-
-#[cfg(any(target_os = "macos", all(debug_assertions, target_os = "linux")))]
-fn zip_signed_by(archive: &Path, keys: &[[u8; 32]]) -> Result<()> {
-    signed_by(archive, keys, |file, keys, context| {
-        zipsign_api::verify::verify_zip(file, keys, Some(context))
-            .map(drop)
-            .map_err(failure)
-    })
-}
-
-#[cfg(target_os = "macos")]
-fn extract(archive: &Path, into: &Path) -> Result<()> {
-    zip::ZipArchive::new(File::open(archive).map_err(failure)?)
-        .and_then(|mut zip| zip.extract(into))
-        .map_err(failure)
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn verify_signature(_: &Path, _: &[[u8; 32]]) -> Result<()> {
-    Err("Unsupported archive".into())
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn extract(_: &Path, _: &Path) -> Result<()> {
-    Err("Unsupported archive".into())
-}
-
-/// The regular files of a safe zip: no links or special files, bounded count and size.
-#[cfg(any(target_os = "macos", all(debug_assertions, target_os = "linux")))]
-fn list_zip(path: &Path) -> Result<std::collections::HashSet<PathBuf>> {
-    let mut archive = zip::ZipArchive::new(File::open(path).map_err(failure)?).map_err(failure)?;
-    if archive.len() > 4096 {
-        return Err("Archive has too many entries".into());
+    /// Shipped with Windows 10 1803 and later; the full path skips a `curl.exe` beside Fogu.
+    pub(super) fn curl() -> Option<PathBuf> {
+        Some(
+            std::env::var_os("SystemRoot")
+                .map_or_else(|| r"C:\Windows".into(), PathBuf::from)
+                .join(r"System32\curl.exe"),
+        )
+        .filter(|p| p.is_file())
     }
-    let mut total = 0u64;
-    let (mut names, mut files) = (
-        std::collections::HashSet::new(),
-        std::collections::HashSet::new(),
-    );
-    for index in 0..archive.len() {
-        let entry = archive.by_index(index).map_err(failure)?;
-        total = total
-            .checked_add(entry.size())
-            .ok_or("Archive is too large")?;
-        let path = entry.enclosed_name().ok_or("Unsafe archive path")?;
-        let kind = entry.unix_mode().unwrap_or(0) & 0o170_000;
-        if total > MAX_EXTRACT
-            || !safe_entry(&path)
-            || !names.insert(path.clone())
-            || !matches!(kind, 0 | 0o100_000 | 0o040_000)
+    pub(super) fn quiet_probe(command: &mut Command) {
+        command.creation_flags(0x0800_0000);
+    }
+    pub(super) fn preflight(target: &Target) -> Result<()> {
+        if !fs::metadata(&target.destination)
+            .map_err(failure)?
+            .is_file()
         {
-            return Err("Unsafe or oversized archive".into());
+            return Err("Unsupported installation".into());
         }
-        if entry.is_file() {
-            files.insert(path);
+        if !ota_supported() {
+            return Err("Download the portable release to update Fogu".into());
         }
+        Ok(())
     }
-    Ok(files)
+    pub(super) fn list_archive(path: &Path) -> Result<()> {
+        list_zip(path).map(drop)
+    }
+    pub(super) fn verify(source: &Path, expected: &Version) -> Result<()> {
+        if probe_version(source)? != *expected {
+            return Err("Executable version does not match release".into());
+        }
+        Ok(())
+    }
+    pub(super) fn commit(source: &Path, target: &Target, stage: &Path) -> Result<()> {
+        // `self_replace` moves the running exe aside before copying the new one in: a copy kept in
+        // the stage puts it back if that copy fails (disk full, antivirus).
+        let backup = stage.join("previous");
+        fs::copy(&target.destination, &backup).map_err(failure)?;
+        if let Err(e) = self_replace::self_replace(source) {
+            tracing::debug!(%e, "Windows replacement failed");
+            if !target.destination.exists() && fs::copy(&backup, &target.destination).is_err() {
+                return Err(format!(
+                    "Replacement failed; copy {} back to {}",
+                    backup.display(),
+                    target.destination.display()
+                ));
+            }
+            return Err("Replacement failed; close other Fogu windows and retry".into());
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

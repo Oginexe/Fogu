@@ -96,6 +96,8 @@ semver = { version = "1.0.28", features = ["serde"] }
 flate2 = "1.1.10"
 tar = { version = "0.4.46", default-features = false }
 zip = { version = "9.1.0", default-features = false, features = ["deflate"] }
+# why: Windows can't rename over a running exe; this moves it aside first
+self-replace = "1.5.0"
 
 [workspace.lints.rust]
 # `deny`, not `forbid`: `fogu_core::winsec` (Windows only) is the one module allowed to opt out.
