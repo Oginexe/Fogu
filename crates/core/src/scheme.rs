@@ -98,22 +98,33 @@ pub struct ColorScheme {
     pub ansi: [RgbColor; 16],
 }
 
-/// The 5 built-in schemes, parsed once from the embedded TOML assets.
-static BUILTINS: LazyLock<[ColorScheme; 5]> = LazyLock::new(load_builtins);
+/// The 16 built-in schemes, parsed once from the embedded TOML assets.
+static BUILTINS: LazyLock<[ColorScheme; 16]> = LazyLock::new(load_builtins);
 
 #[expect(
     clippy::expect_used,
     reason = "the asset strings are compile-time-embedded and fixed; a typo in one is a build-\
-              time bug caught immediately by `five_builtins_with_distinct_names` and every other \
+              time bug caught immediately by `sixteen_builtins_with_distinct_names` and every other \
               test in this module, never a runtime failure mode for users"
 )]
-fn load_builtins() -> [ColorScheme; 5] {
-    const SOURCES: [&str; 5] = [
+fn load_builtins() -> [ColorScheme; 16] {
+    const SOURCES: [&str; 16] = [
         include_str!("../../../assets/schemes/nocturne.toml"),
         include_str!("../../../assets/schemes/fogu-light.toml"),
         include_str!("../../../assets/schemes/solarized-dark.toml"),
         include_str!("../../../assets/schemes/dracula.toml"),
+        include_str!("../../../assets/schemes/catppuccin-latte.toml"),
+        include_str!("../../../assets/schemes/catppuccin-frappe.toml"),
+        include_str!("../../../assets/schemes/catppuccin-macchiato.toml"),
         include_str!("../../../assets/schemes/catppuccin-mocha.toml"),
+        include_str!("../../../assets/schemes/gruvbox-dark.toml"),
+        include_str!("../../../assets/schemes/gruvbox-light.toml"),
+        include_str!("../../../assets/schemes/nord.toml"),
+        include_str!("../../../assets/schemes/tokyo-night.toml"),
+        include_str!("../../../assets/schemes/tokyo-night-storm.toml"),
+        include_str!("../../../assets/schemes/tokyo-night-moon.toml"),
+        include_str!("../../../assets/schemes/tokyo-night-day.toml"),
+        include_str!("../../../assets/schemes/one-dark.toml"),
     ];
     SOURCES.map(|src| toml::from_str(src).expect("builtin colour scheme asset"))
 }
@@ -207,13 +218,13 @@ mod tests {
     }
 
     #[test]
-    fn five_builtins_with_distinct_names() {
+    fn sixteen_builtins_with_distinct_names() {
         let builtins = ColorScheme::builtins();
-        assert_eq!(builtins.len(), 5);
+        assert_eq!(builtins.len(), 16);
         let names: Vec<&str> = builtins.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(
             names.iter().collect::<std::collections::HashSet<_>>().len(),
-            5
+            16
         );
         assert!(ColorScheme::by_name("Dracula").is_some());
         assert!(ColorScheme::by_name("Nocturne").is_some());

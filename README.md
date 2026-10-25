@@ -224,7 +224,9 @@ xcode-select --install
 - Settings page: colour scheme gallery, fonts, cursor, terminal, sidebar, SFTP and recovery
   options, applied live and written to `config.toml`; and the whole `config.toml` as text, saved
   only when it loads
-- Built-in schemes: Nocturne (the default), Fogu Light, Solarized Dark, Dracula, Catppuccin Mocha;
+- Built-in schemes: Nocturne (the default), Fogu Light, Solarized Dark, Dracula, Catppuccin
+  (Latte, Frappé, Macchiato, Mocha), Gruvbox (Dark, Light), Nord, Tokyo Night (Night, Storm, Moon,
+  Day), One Dark;
   fonts, cursor and every key binding configurable
 
 </details>
@@ -272,7 +274,7 @@ Fogu works with no configuration. To customise it, edit `~/.config/fogu/config.t
 
 ```toml
 [appearance]
-color_scheme = "Dracula"   # built in: Nocturne, Fogu Light, Solarized Dark, Dracula, Catppuccin Mocha
+color_scheme = "Dracula"   # built in: Nocturne, Fogu Light, Solarized Dark, Dracula, Catppuccin Mocha… (Settings › Appearance)
 
 [[profiles]]
 id = "home-server"

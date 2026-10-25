@@ -12,6 +12,8 @@
   marks it "default". The built-in "Default shell" is now named after the computer.
 - Settings → config.toml: the whole file as text, for the keys the pages don't show. Save writes it
   only when it loads (the error otherwise) and applies it at once; Revert reads it again.
+- Colour schemes: Catppuccin Latte, Frappé and Macchiato next to Mocha; Gruvbox Dark and Light;
+  Nord; Tokyo Night, Storm, Moon and Day; One Dark.
 
 ### Changed
 - The Linux release runs on glibc 2.28 or newer (was 2.35): Debian 10, Ubuntu 20.04, RHEL 8.
