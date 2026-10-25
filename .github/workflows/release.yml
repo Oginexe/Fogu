@@ -33,9 +33,10 @@ jobs:
         run: |
           cargo install --locked --features cli cargo-about@0.9.2
           cargo about generate --locked -m crates/app/Cargo.toml about.hbs -o THIRD_PARTY_CRATES
-          # Windows checks out with CRLF line ends, so the generated file has them too.
-          tr -d '\r' < THIRD_PARTY_CRATES | cmp -s - <(gzip -dc assets/updater/notices.gz) ||
-            { echo "Run scripts/regenerate-updater-notices.sh after dependency changes"; exit 1; }
+          # The binary embeds exactly the list this archive ships (`fogu --licenses`, About), so
+          # a stale or differently generated assets/updater/notices.gz never reaches a release.
+          # CRs dropped: Windows checks out with CRLF line ends.
+          tr -d '\r' < THIRD_PARTY_CRATES | gzip -9 -n > assets/updater/notices.gz
       - name: Linux build on glibc 2.28
         if: runner.os == 'Linux'
         env:

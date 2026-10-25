@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Refresh the crate licences built into Fogu (`fogu --licenses`) when Cargo.lock changes; the
-# release workflow fails if they differ. Needs cargo-about (`cargo install --locked --features cli
+# Refresh the crate licences built into Fogu (`fogu --licenses`) when Cargo.lock changes, for
+# local builds (release CI regenerates them itself). Needs cargo-about (`cargo install --locked --features cli
 # cargo-about@0.9.2`).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
