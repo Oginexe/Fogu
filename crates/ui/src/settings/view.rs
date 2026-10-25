@@ -409,9 +409,9 @@ fn scheme_card<'a>(i: usize, scheme: &ColorScheme, selected: bool, look: Look) -
     let mut name = row![text(scheme.name.clone()).size(12.5).color(look.fg)]
         .spacing(8)
         .align_y(Alignment::Center);
-    if scheme.name == "Nocturne" {
+    if scheme.name == ColorScheme::default().name {
         name = name.push(
-            container(text("New").size(10).color(t::A100))
+            container(text("Default").size(10).color(t::A100))
                 .padding([1, 6])
                 .style(|_theme: &iced::Theme| style::tag(t::A800)),
         );
