@@ -15,6 +15,8 @@
 
 ### Changed
 - The Linux release runs on glibc 2.28 or newer (was 2.35): Debian 10, Ubuntu 20.04, RHEL 8.
+- Nocturne is the default colour scheme, with new terminal colours, and Fogu Light is a new light
+  palette; both are Fogu's own. Fogu Dark is gone: a config that names it gets Nocturne.
 
 ### Security
 - Updated crypto-bigint to 0.7.6 to fix timing variability in integer operations used by SSH cryptography.

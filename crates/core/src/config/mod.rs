@@ -127,7 +127,7 @@ impl Default for Appearance {
             fallback_fonts: Vec::new(),
             cursor_shape: CursorShapeCfg::default(),
             cursor_blink: true,
-            color_scheme: "Fogu Dark".to_owned(),
+            color_scheme: "Nocturne".to_owned(),
             tabs_location: TabsLocation::default(),
             terminal_bg_alpha: None,
             window_opacity: 1.0,
