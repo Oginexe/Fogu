@@ -27,6 +27,32 @@ const LOG_MAX_BYTES: u64 = 4 * 1024 * 1024;
 fn main() -> fogu_ui::Result {
     harden_process();
     let cli = Cli::parse();
+    if let Some(pid) = cli.after_update_of
+        && let Err(error) = wait_update_parent(pid)
+    {
+        eprintln!("fogu: {error}");
+        std::process::exit(1);
+    }
+    #[cfg(all(debug_assertions, target_os = "linux"))]
+    if let Some((dir, version)) = &cli.updater_verify {
+        match fogu_ui::updater::debug_verify_release(dir, version) {
+            Ok(()) => std::process::exit(0),
+            Err(error) => {
+                eprintln!("fogu: {error}");
+                std::process::exit(1);
+            }
+        }
+    }
+    #[cfg(debug_assertions)]
+    if cli.updater_test {
+        match fogu_ui::updater::debug_install() {
+            Ok(()) => std::process::exit(0),
+            Err(error) => {
+                eprintln!("fogu: {error}");
+                std::process::exit(1);
+            }
+        }
+    }
     cli::reexec_with_env(&cli);
     let state_dir = state_dir();
     crash::install(state_dir.as_ref().ok().cloned());
@@ -169,8 +195,82 @@ fn state_dir() -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// A restarted child must never race the parent's recovery writers or instance lock.
+fn wait_update_parent(pid: u32) -> Result<(), String> {
+    let start = std::time::Instant::now();
+    while parent_alive(pid)? {
+        if start.elapsed() >= std::time::Duration::from_secs(30) {
+            return Err("update parent did not exit; reopen Fogu manually".into());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn parent_alive(pid: u32) -> Result<bool, String> {
+    let pid = rustix::process::Pid::from_raw(i32::try_from(pid).map_err(|e| e.to_string())?)
+        .ok_or("invalid parent pid")?;
+    match rustix::process::test_kill_process(pid) {
+        Ok(()) | Err(rustix::io::Errno::PERM) => Ok(true),
+        Err(rustix::io::Errno::SRCH) => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(windows)]
+fn parent_alive(pid: u32) -> Result<bool, String> {
+    // shortcut: tasklist is the safe process query, replace with a safe handle API when available.
+    use std::os::windows::process::CommandExt as _;
+    let tool =
+        PathBuf::from(std::env::var_os("SystemRoot").ok_or("missing Windows system directory")?)
+            .join("System32/tasklist.exe");
+    let mut child = std::process::Command::new(tool)
+        .creation_flags(0x0800_0000)
+        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if start.elapsed() < std::time::Duration::from_secs(3) => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("could not query update parent in time".into());
+            }
+        }
+    }
+    let output = child.wait_with_output().map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        return Err("could not query update parent".into());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).contains(&format!("\"{pid}\"")))
+}
+
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn update_barrier_waits_until_the_parent_is_reaped() {
+        assert!(super::parent_alive(std::process::id()).unwrap());
+        let mut child = std::process::Command::new("sh")
+            .args(["-c", "sleep 0.1"])
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        let reap = std::thread::spawn(move || child.wait().unwrap());
+        super::wait_update_parent(pid).unwrap();
+        assert!(!super::parent_alive(pid).unwrap());
+        assert!(reap.join().unwrap().success());
+    }
+
     #[test]
     fn the_log_rotates_past_its_limit_and_old_daily_files_go() {
         use std::io::Write as _;

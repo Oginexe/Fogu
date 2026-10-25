@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+<!-- fogu-update: {"schema":1,"from":">=0.1.6, <0.2.0"} -->
+
+### Added
+- Settings → Updates: Fogu looks for a new release, shows what changed and installs it only when
+  you choose, checking its signature first; then it restarts with your tabs. A new version is
+  announced at most twice. Linux for now; macOS and Windows link to the download. Needs `curl`.
+- Profile menu → "Use for new tabs": new tabs open that profile (stored or built-in); the sidebar
+  marks it "default". The built-in "Default shell" is now named after the computer.
+- Settings → config.toml: the whole file as text, for the keys the pages don't show. Save writes it
+  only when it loads (the error otherwise) and applies it at once; Revert reads it again.
+
+### Changed
+- The Linux release runs on glibc 2.28 or newer (was 2.35): Debian 10, Ubuntu 20.04, RHEL 8.
+
+### Security
+- Updated crypto-bigint to 0.7.6 to fix timing variability in integer operations used by SSH cryptography.
+
 ## 0.1.6 (2026-10-23)
 
 ### Added

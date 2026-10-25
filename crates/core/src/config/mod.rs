@@ -13,7 +13,7 @@ pub use edit::{
     ProfileEdit, SETTINGS_SECTIONS, edit_profiles, edit_settings, slug, unique_group_id,
     unique_profile_id, unique_profile_name,
 };
-pub use io::{ConfigError, config_dir, load, set_profile_background};
+pub use io::{ConfigError, config_dir, load, set_profile_background, write_text};
 pub use sftp::SftpCfg;
 pub use validate::{ConfigIssue, validate};
 
